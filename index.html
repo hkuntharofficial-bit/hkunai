@@ -1466,7 +1466,48 @@ startButton.addEventListener(
 
       window.hkunGeminiAnalysis =
         analysis;
+/* STEP 3 — MYANMAR RECAP SCRIPT */
 
+stages[2].textContent =
+  "Generating Myanmar recap script...";
+
+stages[2].className =
+  "stage-status active";
+
+const scriptResponse =
+  await fetch(
+    BACKEND + "/api/generate-script",
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        analysis: analysis.analysis,
+        recapStyle:
+          document.getElementById("style").value,
+        voice:
+          document.getElementById("voice").value
+      })
+    }
+  );
+
+const scriptResult =
+  await readJSON(scriptResponse);
+
+window.hkunRecapScript =
+  scriptResult.script;
+
+stages[2].textContent =
+  "✓ Myanmar recap script completed";
+
+stages[2].className =
+  "stage-status done";
+
+console.log(
+  "HKUN AI Myanmar Recap Script:",
+  scriptResult.script
+);
 
       stages[1].textContent =
         "✓ Video analysis completed";
