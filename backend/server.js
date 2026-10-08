@@ -5,10 +5,16 @@ const fs = require("fs");
 const path = require("path");
 const os = require("os");
 const crypto = require("crypto");
+const { pipeline } = require("stream/promises");
+
+const {
+  GoogleGenAI
+} = require("@google/genai");
 
 const {
   S3Client,
   PutObjectCommand,
+  GetObjectCommand,
   CreateMultipartUploadCommand,
   UploadPartCommand,
   CompleteMultipartUploadCommand,
@@ -20,148 +26,233 @@ const {
   getSignedUrl
 } = require("@aws-sdk/s3-request-presigner");
 
+
+/* =========================================================
+   APP
+========================================================= */
+
 const app = express();
 
-const PORT = process.env.PORT || 3000;
+const PORT =
+  process.env.PORT || 3000;
 
 const FRONTEND_ORIGIN =
   "https://hkuntharofficial-bit.github.io";
+
 
 /* =========================================================
    BASIC MIDDLEWARE
 ========================================================= */
 
-app.use(cors({
-  origin: FRONTEND_ORIGIN,
-  methods: [
-    "GET",
-    "POST",
-    "OPTIONS"
-  ],
-  allowedHeaders: [
-    "Content-Type"
-  ]
-}));
+app.use(
+  cors({
+    origin: FRONTEND_ORIGIN,
 
-app.use(express.json({
-  limit: "10mb"
-}));
+    methods: [
+      "GET",
+      "POST",
+      "OPTIONS"
+    ],
 
-app.use((req, res, next) => {
+    allowedHeaders: [
+      "Content-Type"
+    ]
+  })
+);
 
-  res.header(
-    "Access-Control-Allow-Origin",
-    FRONTEND_ORIGIN
-  );
+app.use(
+  express.json({
+    limit: "10mb"
+  })
+);
 
-  res.header(
-    "Access-Control-Allow-Methods",
-    "GET,POST,OPTIONS"
-  );
+app.use(
+  (req, res, next) => {
 
-  res.header(
-    "Access-Control-Allow-Headers",
-    "Content-Type"
-  );
+    res.header(
+      "Access-Control-Allow-Origin",
+      FRONTEND_ORIGIN
+    );
 
-  if (req.method === "OPTIONS") {
-    return res.sendStatus(204);
+    res.header(
+      "Access-Control-Allow-Methods",
+      "GET,POST,OPTIONS"
+    );
+
+    res.header(
+      "Access-Control-Allow-Headers",
+      "Content-Type"
+    );
+
+    if (req.method === "OPTIONS") {
+      return res.sendStatus(204);
+    }
+
+    next();
   }
+);
 
-  next();
-});
 
 /* =========================================================
    R2 CONFIG
 ========================================================= */
 
-const R2 = new S3Client({
-  region: "auto",
+const R2 =
+  new S3Client({
 
-  endpoint:
-    process.env.R2_ENDPOINT,
+    region:
+      "auto",
 
-  forcePathStyle: true,
+    endpoint:
+      process.env.R2_ENDPOINT,
 
-  credentials: {
-    accessKeyId:
-      process.env.R2_ACCESS_KEY_ID,
+    forcePathStyle:
+      true,
 
-    secretAccessKey:
-      process.env.R2_SECRET_ACCESS_KEY
-  }
-});
+    credentials: {
+
+      accessKeyId:
+        process.env.R2_ACCESS_KEY_ID,
+
+      secretAccessKey:
+        process.env.R2_SECRET_ACCESS_KEY
+
+    }
+
+  });
+
 
 const BUCKET =
   process.env.R2_BUCKET ||
   "hkunai-videos";
 
+
 /* =========================================================
-   TEMP UPLOAD DIRECTORY
+   GEMINI CONFIG
 ========================================================= */
 
-const TEMP_DIR = path.join(
-  os.tmpdir(),
-  "hkun-ai-uploads"
-);
+const GEMINI_API_KEY =
+  process.env.GEMINI_API_KEY || "";
+
+
+const GEMINI =
+  GEMINI_API_KEY
+    ? new GoogleGenAI({
+        apiKey:
+          GEMINI_API_KEY
+      })
+    : null;
+
+
+/*
+  Current Gemini video model.
+*/
+
+const GEMINI_MODEL =
+  process.env.GEMINI_MODEL ||
+  "gemini-3.8-flash";
+
+
+/*
+  Gemini File API limits depend on account/tier.
+
+  Default safety limit:
+  2 GB.
+
+  This can be increased through Render:
+
+  GEMINI_MAX_FILE_BYTES
+*/
+
+const GEMINI_MAX_FILE_BYTES =
+  Number(
+    process.env.GEMINI_MAX_FILE_BYTES ||
+    2 * 1024 * 1024 * 1024
+  );
+
+
+/* =========================================================
+   TEMP DIRECTORY
+========================================================= */
+
+const TEMP_DIR =
+  path.join(
+    os.tmpdir(),
+    "hkun-ai-uploads"
+  );
+
 
 if (!fs.existsSync(TEMP_DIR)) {
+
   fs.mkdirSync(
     TEMP_DIR,
     {
       recursive: true
     }
   );
+
 }
+
 
 /* =========================================================
    MULTER
 ========================================================= */
 
-const upload = multer({
+const upload =
+  multer({
 
-  dest: TEMP_DIR,
+    dest:
+      TEMP_DIR,
 
-  limits: {
+    limits: {
 
-    /*
-      32 MB maximum per uploaded part.
-      HKUN AI will normally use 16 MB chunks.
-    */
+      /*
+        Each browser upload part:
+        maximum 32 MB.
 
-    fileSize:
-      32 * 1024 * 1024
+        HKUN AI frontend normally:
+        16 MB per part.
+      */
 
-  }
-});
+      fileSize:
+        32 * 1024 * 1024
+
+    }
+
+  });
+
 
 /* =========================================================
    MULTIPART SESSION STORAGE
 ========================================================= */
 
-/*
-  Render process memory ထဲမှာ temporary session သိမ်းမယ်။
-
-  Upload ပြီးတဲ့အထိသာ လိုအပ်ပါတယ်။
-*/
-
 const multipartSessions =
   new Map();
+
 
 /* =========================================================
    HELPERS
 ========================================================= */
 
-function safeFilename(filename) {
+function safeFilename(
+  filename
+) {
 
-  return String(filename || "video.mp4")
+  return String(
+    filename ||
+    "video.mp4"
+  )
     .replace(
       /[^a-zA-Z0-9._-]/g,
       "_"
     );
+
 }
 
-function createStorageKey(filename) {
+
+function createStorageKey(
+  filename
+) {
 
   return (
     "uploads/" +
@@ -171,9 +262,13 @@ function createStorageKey(filename) {
     "-" +
     safeFilename(filename)
   );
+
 }
 
-function removeTempFile(filePath) {
+
+function removeTempFile(
+  filePath
+) {
 
   if (!filePath) {
     return;
@@ -181,8 +276,16 @@ function removeTempFile(filePath) {
 
   try {
 
-    if (fs.existsSync(filePath)) {
-      fs.unlinkSync(filePath);
+    if (
+      fs.existsSync(
+        filePath
+      )
+    ) {
+
+      fs.unlinkSync(
+        filePath
+      );
+
     }
 
   } catch (error) {
@@ -193,25 +296,139 @@ function removeTempFile(filePath) {
     );
 
   }
+
 }
+
+
+/*
+  Download one R2 object to
+  Render temporary storage.
+*/
+
+async function downloadR2Object(
+  key,
+  destination
+) {
+
+  const result =
+    await R2.send(
+      new GetObjectCommand({
+
+        Bucket:
+          BUCKET,
+
+        Key:
+          key
+
+      })
+    );
+
+
+  if (!result.Body) {
+
+    throw new Error(
+      "R2 object has no body"
+    );
+
+  }
+
+
+  await pipeline(
+    result.Body,
+    fs.createWriteStream(
+      destination
+    )
+  );
+
+
+  return {
+
+    contentType:
+      result.ContentType ||
+      "video/mp4",
+
+    contentLength:
+      result.ContentLength || null
+
+  };
+
+}
+
+
+/*
+  Wait until Gemini has processed
+  the uploaded video.
+*/
+
+async function waitForGeminiFile(
+  file
+) {
+
+  let current =
+    file;
+
+
+  while (
+    current &&
+    current.state === "PROCESSING"
+  ) {
+
+    await new Promise(
+      resolve =>
+        setTimeout(
+          resolve,
+          5000
+        )
+    );
+
+
+    current =
+      await GEMINI.files.get({
+        name:
+          current.name
+      });
+
+  }
+
+
+  if (
+    current &&
+    current.state === "FAILED"
+  ) {
+
+    throw new Error(
+      "Gemini video processing failed"
+    );
+
+  }
+
+
+  return current;
+
+}
+
 
 /* =========================================================
    HOME
 ========================================================= */
 
-app.get("/", (req, res) => {
+app.get(
+  "/",
+  (req, res) => {
 
-  res.json({
+    res.json({
 
-    service:
-      "HKUN AI Backend",
+      service:
+        "HKUN AI Backend",
 
-    status:
-      "online"
+      status:
+        "online"
 
-  });
+    });
 
-});
+  }
+);
+
 
 /* =========================================================
    HEALTH
@@ -223,15 +440,25 @@ app.get(
 
     res.json({
 
-      ok: true,
+      ok:
+        true,
 
       service:
-        "HKUN AI Backend"
+        "HKUN AI Backend",
+
+      geminiConfigured:
+        Boolean(
+          GEMINI_API_KEY
+        ),
+
+      geminiModel:
+        GEMINI_MODEL
 
     });
 
   }
 );
+
 
 /* =========================================================
    CREATE MULTIPART UPLOAD
@@ -247,13 +474,16 @@ app.post(
         filename,
         contentType,
         fileSize
-      } = req.body || {};
+      } =
+        req.body || {};
+
 
       if (!filename) {
 
         return res.status(400).json({
 
-          ok: false,
+          ok:
+            false,
 
           error:
             "filename is required"
@@ -262,8 +492,12 @@ app.post(
 
       }
 
+
       const size =
-        Number(fileSize || 0);
+        Number(
+          fileSize || 0
+        );
+
 
       if (
         !Number.isFinite(size) ||
@@ -272,7 +506,8 @@ app.post(
 
         return res.status(400).json({
 
-          ok: false,
+          ok:
+            false,
 
           error:
             "fileSize is required"
@@ -281,20 +516,24 @@ app.post(
 
       }
 
-      /*
-        120 minute movie support.
 
-        5 GB limit for now.
+      /*
+        Maximum R2 upload size:
+        5 GB.
       */
 
       if (
         size >
-        5 * 1024 * 1024 * 1024
+        5 *
+        1024 *
+        1024 *
+        1024
       ) {
 
         return res.status(413).json({
 
-          ok: false,
+          ok:
+            false,
 
           error:
             "Video size is larger than 5 GB"
@@ -303,18 +542,17 @@ app.post(
 
       }
 
+
       const mimeType =
         contentType ||
         "video/mp4";
+
 
       const key =
         createStorageKey(
           filename
         );
 
-      /*
-        Start R2 multipart upload
-      */
 
       const command =
         new CreateMultipartUploadCommand({
@@ -330,10 +568,16 @@ app.post(
 
         });
 
-      const result =
-        await R2.send(command);
 
-      if (!result.UploadId) {
+      const result =
+        await R2.send(
+          command
+        );
+
+
+      if (
+        !result.UploadId
+      ) {
 
         throw new Error(
           "R2 UploadId was not returned"
@@ -341,12 +585,16 @@ app.post(
 
       }
 
+
       /*
-        16 MB default chunk size
+        16 MB chunks.
       */
 
       const partSize =
-        16 * 1024 * 1024;
+        16 *
+        1024 *
+        1024;
+
 
       const session = {
 
@@ -356,7 +604,9 @@ app.post(
         key,
 
         filename:
-          safeFilename(filename),
+          safeFilename(
+            filename
+          ),
 
         contentType:
           mimeType,
@@ -374,14 +624,17 @@ app.post(
 
       };
 
+
       multipartSessions.set(
         result.UploadId,
         session
       );
 
+
       res.json({
 
-        ok: true,
+        ok:
+          true,
 
         kind:
           "multipart",
@@ -396,10 +649,12 @@ app.post(
 
         totalParts:
           Math.ceil(
-            size / partSize
+            size /
+            partSize
           )
 
       });
+
 
     } catch (error) {
 
@@ -408,9 +663,11 @@ app.post(
         error
       );
 
+
       res.status(500).json({
 
-        ok: false,
+        ok:
+          false,
 
         error:
           "Failed to initialize R2 multipart upload"
@@ -422,6 +679,7 @@ app.post(
   }
 );
 
+
 /* =========================================================
    UPLOAD ONE PART
 ========================================================= */
@@ -431,7 +689,9 @@ app.post(
   upload.single("part"),
   async (req, res) => {
 
-    let tempFile = null;
+    let tempFile =
+      null;
+
 
     try {
 
@@ -439,7 +699,8 @@ app.post(
 
         return res.status(400).json({
 
-          ok: false,
+          ok:
+            false,
 
           error:
             "part file is required"
@@ -448,8 +709,10 @@ app.post(
 
       }
 
+
       tempFile =
         req.file.path;
+
 
       const uploadId =
         String(
@@ -457,10 +720,12 @@ app.post(
           ""
         );
 
+
       const partNumber =
         Number(
           req.body.partNumber
         );
+
 
       if (!uploadId) {
 
@@ -470,7 +735,8 @@ app.post(
 
         return res.status(400).json({
 
-          ok: false,
+          ok:
+            false,
 
           error:
             "uploadId is required"
@@ -478,6 +744,7 @@ app.post(
         });
 
       }
+
 
       if (
         !Number.isInteger(
@@ -493,7 +760,8 @@ app.post(
 
         return res.status(400).json({
 
-          ok: false,
+          ok:
+            false,
 
           error:
             "Invalid partNumber"
@@ -502,10 +770,12 @@ app.post(
 
       }
 
+
       const session =
         multipartSessions.get(
           uploadId
         );
+
 
       if (!session) {
 
@@ -515,7 +785,8 @@ app.post(
 
         return res.status(404).json({
 
-          ok: false,
+          ok:
+            false,
 
           error:
             "Upload session not found"
@@ -524,14 +795,12 @@ app.post(
 
       }
 
-      /*
-        Read temporary chunk
-      */
 
       const body =
         fs.createReadStream(
           tempFile
         );
+
 
       const command =
         new UploadPartCommand({
@@ -556,13 +825,16 @@ app.post(
 
         });
 
+
       const result =
         await R2.send(
           command
         );
 
+
       const eTag =
         result.ETag;
+
 
       if (!eTag) {
 
@@ -572,26 +844,33 @@ app.post(
 
       }
 
+
       const cleanETag =
         eTag.replace(
           /^"|"$/g,
           ""
         );
 
+
       session.parts.set(
         partNumber,
         cleanETag
       );
 
+
       removeTempFile(
         tempFile
       );
 
-      tempFile = null;
+
+      tempFile =
+        null;
+
 
       res.json({
 
-        ok: true,
+        ok:
+          true,
 
         partNumber,
 
@@ -600,6 +879,7 @@ app.post(
 
       });
 
+
     } catch (error) {
 
       console.error(
@@ -607,13 +887,16 @@ app.post(
         error
       );
 
+
       removeTempFile(
         tempFile
       );
 
+
       res.status(500).json({
 
-        ok: false,
+        ok:
+          false,
 
         error:
           "Failed to upload video part",
@@ -627,6 +910,7 @@ app.post(
 
   }
 );
+
 
 /* =========================================================
    COMPLETE MULTIPART UPLOAD
@@ -643,11 +927,13 @@ app.post(
       } =
         req.body || {};
 
+
       if (!uploadId) {
 
         return res.status(400).json({
 
-          ok: false,
+          ok:
+            false,
 
           error:
             "uploadId is required"
@@ -656,16 +942,19 @@ app.post(
 
       }
 
+
       const session =
         multipartSessions.get(
           uploadId
         );
 
+
       if (!session) {
 
         return res.status(404).json({
 
-          ok: false,
+          ok:
+            false,
 
           error:
             "Upload session not found"
@@ -674,13 +963,15 @@ app.post(
 
       }
 
+
       if (
         session.parts.size === 0
       ) {
 
         return res.status(400).json({
 
-          ok: false,
+          ok:
+            false,
 
           error:
             "No uploaded parts found"
@@ -689,9 +980,6 @@ app.post(
 
       }
 
-      /*
-        Sort parts by part number.
-      */
 
       const parts =
         Array.from(
@@ -713,9 +1001,6 @@ app.post(
           })
         );
 
-      /*
-        Complete R2 multipart upload
-      */
 
       const command =
         new CompleteMultipartUploadCommand({
@@ -738,22 +1023,22 @@ app.post(
 
         });
 
+
       const result =
         await R2.send(
           command
         );
 
-      /*
-        Session no longer needed.
-      */
 
       multipartSessions.delete(
         uploadId
       );
 
+
       res.json({
 
-        ok: true,
+        ok:
+          true,
 
         key:
           session.key,
@@ -762,12 +1047,14 @@ app.post(
           BUCKET,
 
         location:
-          result.Location || null,
+          result.Location ||
+          null,
 
         message:
           "Video uploaded successfully"
 
       });
+
 
     } catch (error) {
 
@@ -776,9 +1063,11 @@ app.post(
         error
       );
 
+
       res.status(500).json({
 
-        ok: false,
+        ok:
+          false,
 
         error:
           "Failed to complete R2 multipart upload",
@@ -792,6 +1081,7 @@ app.post(
 
   }
 );
+
 
 /* =========================================================
    ABORT MULTIPART UPLOAD
@@ -808,11 +1098,13 @@ app.post(
       } =
         req.body || {};
 
+
       if (!uploadId) {
 
         return res.status(400).json({
 
-          ok: false,
+          ok:
+            false,
 
           error:
             "uploadId is required"
@@ -821,24 +1113,29 @@ app.post(
 
       }
 
+
       const session =
         multipartSessions.get(
           uploadId
         );
 
+
       if (!session) {
 
         return res.json({
 
-          ok: true,
+          ok:
+            true,
 
-          aborted: false
+          aborted:
+            false
 
         });
 
       }
 
-      const command =
+
+      await R2.send(
         new AbortMultipartUploadCommand({
 
           Bucket:
@@ -850,23 +1147,25 @@ app.post(
           UploadId:
             uploadId
 
-        });
-
-      await R2.send(
-        command
+        })
       );
+
 
       multipartSessions.delete(
         uploadId
       );
 
+
       res.json({
 
-        ok: true,
+        ok:
+          true,
 
-        aborted: true
+        aborted:
+          true
 
       });
+
 
     } catch (error) {
 
@@ -875,9 +1174,11 @@ app.post(
         error
       );
 
+
       res.status(500).json({
 
-        ok: false,
+        ok:
+          false,
 
         error:
           "Failed to abort upload"
@@ -888,6 +1189,539 @@ app.post(
 
   }
 );
+
+
+/* =========================================================
+   GEMINI VIDEO ANALYSIS
+========================================================= */
+
+/*
+  Frontend sends:
+
+  POST /api/analyze-video
+
+  {
+    "key": "uploads/....mp4",
+    "prompt": "Analyze this movie..."
+  }
+
+
+  Backend:
+
+  1. Finds video in R2
+  2. Downloads to Render temp storage
+  3. Uploads to Gemini File API
+  4. Waits for Gemini processing
+  5. Gemini analyzes the actual video
+  6. Returns analysis
+  7. Deletes Render temporary file
+
+  IMPORTANT:
+  Gemini File API stores uploaded files temporarily.
+*/
+
+
+app.post(
+  "/api/analyze-video",
+  async (req, res) => {
+
+    let localVideo =
+      null;
+
+
+    try {
+
+      if (!GEMINI) {
+
+        return res.status(503).json({
+
+          ok:
+            false,
+
+          error:
+            "GEMINI_API_KEY is not configured"
+
+        });
+
+      }
+
+
+      const {
+        key,
+        prompt,
+        mimeType
+      } =
+        req.body || {};
+
+
+      if (!key) {
+
+        return res.status(400).json({
+
+          ok:
+            false,
+
+          error:
+            "R2 video key is required"
+
+        });
+
+      }
+
+
+      /*
+        Only allow videos stored
+        inside uploads/.
+      */
+
+      if (
+        !String(key).startsWith(
+          "uploads/"
+        )
+      ) {
+
+        return res.status(400).json({
+
+          ok:
+            false,
+
+          error:
+            "Invalid video key"
+
+        });
+
+      }
+
+
+      /*
+        Get object metadata first.
+      */
+
+      const head =
+        await R2.send(
+          new GetObjectCommand({
+
+            Bucket:
+              BUCKET,
+
+            Key:
+              key
+
+          })
+        );
+
+
+      const contentLength =
+        Number(
+          head.ContentLength || 0
+        );
+
+
+      if (
+        contentLength >
+        GEMINI_MAX_FILE_BYTES
+      ) {
+
+        return res.status(413).json({
+
+          ok:
+            false,
+
+          error:
+            "Video is larger than the current Gemini processing limit",
+
+          maxBytes:
+            GEMINI_MAX_FILE_BYTES,
+
+          fileBytes:
+            contentLength,
+
+          message:
+            "For very large movies, HKUN AI will use automatic chunk processing in the next processing stage."
+
+        });
+
+      }
+
+
+      /*
+        Close metadata stream if present.
+      */
+
+      if (
+        head.Body &&
+        typeof head.Body.destroy ===
+          "function"
+      ) {
+
+        head.Body.destroy();
+
+      }
+
+
+      /*
+        Unique Render temp filename.
+      */
+
+      localVideo =
+        path.join(
+          TEMP_DIR,
+          "gemini-" +
+            crypto.randomUUID() +
+            "-" +
+            safeFilename(
+              path.basename(
+                key
+              )
+            )
+        );
+
+
+      /*
+        Download R2 video.
+      */
+
+      await downloadR2Object(
+        key,
+        localVideo
+      );
+
+
+      /*
+        Upload video to Gemini Files API.
+      */
+
+      console.log(
+        "Uploading video to Gemini:",
+        key
+      );
+
+
+      let videoFile =
+        await GEMINI.files.upload({
+
+          file:
+            localVideo,
+
+          config: {
+
+            mimeType:
+              mimeType ||
+              "video/mp4"
+
+          }
+
+        });
+
+
+      console.log(
+        "Gemini file:",
+        videoFile.name
+      );
+
+
+      /*
+        Wait for Gemini video
+        processing.
+      */
+
+      videoFile =
+        await waitForGeminiFile(
+          videoFile
+        );
+
+
+      if (
+        !videoFile ||
+        !videoFile.uri
+      ) {
+
+        throw new Error(
+          "Gemini video URI was not returned"
+        );
+
+      }
+
+
+      /*
+        Default HKUN AI analysis
+        instruction.
+
+        User can send a custom
+        prompt from frontend.
+      */
+
+      const analysisPrompt =
+        prompt ||
+        `
+You are HKUN AI, a professional Myanmar Movie Recap video analyst.
+
+Analyze the ACTUAL video carefully.
+
+Do NOT invent events, characters, locations, dialogue, relationships, or facts.
+
+Identify the important story events in chronological order.
+
+For every important event:
+- Give an approximate timestamp.
+- Describe what actually happens.
+- Identify the important characters involved.
+- Describe the important visual scene.
+- Explain why the scene matters to the story.
+
+Focus on scenes that can later be matched to a Myanmar narration timeline.
+
+Return clear chronological information.
+
+The final result must be useful for:
+1. Myanmar Movie Recap narration.
+2. Semantic scene matching.
+3. Selecting relevant original footage.
+4. Maintaining story continuity.
+
+Do not create unrelated scenes.
+Do not assume information that is not visible or supported by the video.
+`;
+
+
+      /*
+        Ask Gemini to analyze the
+        uploaded video.
+      */
+
+      const response =
+        await GEMINI.models.generateContent({
+
+          model:
+            GEMINI_MODEL,
+
+          contents: [
+
+            {
+
+              role:
+                "user",
+
+              parts: [
+
+                {
+
+                  fileData: {
+
+                    fileUri:
+                      videoFile.uri,
+
+                    mimeType:
+                      videoFile.mimeType ||
+                      mimeType ||
+                      "video/mp4"
+
+                  }
+
+                },
+
+                {
+
+                  text:
+                    analysisPrompt
+
+                }
+
+              ]
+
+            }
+
+          ]
+
+        });
+
+
+      const analysisText =
+        response.text ||
+        "";
+
+
+      if (!analysisText) {
+
+        throw new Error(
+          "Gemini returned an empty analysis"
+        );
+
+      }
+
+
+      /*
+        Cleanup Render temporary
+        video immediately.
+
+        Gemini has its own temporary
+        File API copy.
+      */
+
+      removeTempFile(
+        localVideo
+      );
+
+      localVideo =
+        null;
+
+
+      res.json({
+
+        ok:
+          true,
+
+        key,
+
+        geminiFile:
+          videoFile.name,
+
+        model:
+          GEMINI_MODEL,
+
+        analysis:
+          analysisText,
+
+        message:
+          "Video analysis completed"
+
+      });
+
+
+    } catch (error) {
+
+      console.error(
+        "GEMINI VIDEO ANALYSIS ERROR:",
+        error
+      );
+
+
+      removeTempFile(
+        localVideo
+      );
+
+
+      res.status(500).json({
+
+        ok:
+          false,
+
+        error:
+          "Gemini video analysis failed",
+
+        message:
+          error.message
+
+      });
+
+    }
+
+  }
+);
+
+
+/* =========================================================
+   DELETE R2 VIDEO
+========================================================= */
+
+app.post(
+  "/api/delete-video",
+  async (req, res) => {
+
+    try {
+
+      const {
+        key
+      } =
+        req.body || {};
+
+
+      if (!key) {
+
+        return res.status(400).json({
+
+          ok:
+            false,
+
+          error:
+            "R2 video key is required"
+
+        });
+
+      }
+
+
+      if (
+        !String(key).startsWith(
+          "uploads/"
+        )
+      ) {
+
+        return res.status(400).json({
+
+          ok:
+            false,
+
+          error:
+            "Invalid video key"
+
+        });
+
+      }
+
+
+      await R2.send(
+        new DeleteObjectCommand({
+
+          Bucket:
+            BUCKET,
+
+          Key:
+            key
+
+        })
+      );
+
+
+      res.json({
+
+        ok:
+          true,
+
+        key,
+
+        deleted:
+          true
+
+      });
+
+
+    } catch (error) {
+
+      console.error(
+        "DELETE VIDEO ERROR:",
+        error
+      );
+
+
+      res.status(500).json({
+
+        ok:
+          false,
+
+        error:
+          "Failed to delete video",
+
+        message:
+          error.message
+
+      });
+
+    }
+
+  }
+);
+
 
 /* =========================================================
    OLD SINGLE UPLOAD URL
@@ -902,13 +1736,16 @@ app.get(
       const {
         filename,
         contentType
-      } = req.query;
+      } =
+        req.query;
+
 
       if (!filename) {
 
         return res.status(400).json({
 
-          ok: false,
+          ok:
+            false,
 
           error:
             "filename is required"
@@ -917,16 +1754,19 @@ app.get(
 
       }
 
+
       const safeName =
         safeFilename(
           filename
         );
+
 
       const key =
         "uploads/" +
         Date.now() +
         "-" +
         safeName;
+
 
       const command =
         new PutObjectCommand({
@@ -943,6 +1783,7 @@ app.get(
 
         });
 
+
       const uploadUrl =
         await getSignedUrl(
           R2,
@@ -953,9 +1794,11 @@ app.get(
           }
         );
 
+
       res.json({
 
-        ok: true,
+        ok:
+          true,
 
         uploadUrl,
 
@@ -966,6 +1809,7 @@ app.get(
 
       });
 
+
     } catch (error) {
 
       console.error(
@@ -973,9 +1817,11 @@ app.get(
         error
       );
 
+
       res.status(500).json({
 
-        ok: false,
+        ok:
+          false,
 
         error:
           "Failed to create upload URL"
@@ -987,17 +1833,24 @@ app.get(
   }
 );
 
+
 /* =========================================================
    ERROR HANDLER
 ========================================================= */
 
 app.use(
-  (error, req, res, next) => {
+  (
+    error,
+    req,
+    res,
+    next
+  ) => {
 
     console.error(
       "SERVER ERROR:",
       error
     );
+
 
     if (
       error.code ===
@@ -1006,7 +1859,8 @@ app.use(
 
       return res.status(413).json({
 
-        ok: false,
+        ok:
+          false,
 
         error:
           "Upload part is larger than 32 MB"
@@ -1015,9 +1869,11 @@ app.use(
 
     }
 
+
     res.status(500).json({
 
-      ok: false,
+      ok:
+        false,
 
       error:
         error.message ||
@@ -1028,8 +1884,9 @@ app.use(
   }
 );
 
+
 /* =========================================================
-   CLEAN EXPIRED SESSIONS
+   CLEAN EXPIRED MULTIPART SESSIONS
 ========================================================= */
 
 setInterval(
@@ -1037,6 +1894,7 @@ setInterval(
 
     const now =
       Date.now();
+
 
     for (
       const [
@@ -1047,13 +1905,16 @@ setInterval(
     ) {
 
       /*
-        3 hour expiration
+        3 hour expiration.
       */
 
       if (
         now -
         session.createdAt >
-        3 * 60 * 60 * 1000
+        3 *
+        60 *
+        60 *
+        1000
       ) {
 
         try {
@@ -1073,6 +1934,7 @@ setInterval(
             })
           );
 
+
         } catch (error) {
 
           console.error(
@@ -1081,6 +1943,7 @@ setInterval(
           );
 
         }
+
 
         multipartSessions.delete(
           uploadId
@@ -1091,8 +1954,11 @@ setInterval(
     }
 
   },
-  10 * 60 * 1000
+  10 *
+  60 *
+  1000
 );
+
 
 /* =========================================================
    START SERVER
@@ -1103,7 +1969,20 @@ app.listen(
   () => {
 
     console.log(
-      `HKUN AI Backend running on port ${PORT}`
+      "HKUN AI Backend running on port " +
+      PORT
+    );
+
+    console.log(
+      "Gemini configured: " +
+      Boolean(
+        GEMINI_API_KEY
+      )
+    );
+
+    console.log(
+      "Gemini model: " +
+      GEMINI_MODEL
     );
 
   }
