@@ -348,7 +348,7 @@ input[type="range"]{
 </section>
 
 
-<!-- Video Upload -->
+<!-- VIDEO UPLOAD -->
 
 <div class="card">
 
@@ -389,7 +389,7 @@ input[type="range"]{
 </div>
 
 
-<!-- Voice -->
+<!-- VOICE -->
 
 <div class="card">
 
@@ -454,7 +454,7 @@ input[type="range"]{
 </div>
 
 
-<!-- Recap -->
+<!-- RECAP -->
 
 <div class="card">
 
@@ -497,7 +497,7 @@ input[type="range"]{
 </div>
 
 
-<!-- Video Settings -->
+<!-- VIDEO SETTINGS -->
 
 <div class="card">
 
@@ -648,7 +648,7 @@ input[type="range"]{
 </div>
 
 
-<!-- Logo -->
+<!-- LOGO -->
 
 <div class="card">
 
@@ -738,7 +738,7 @@ input[type="range"]{
 </div>
 
 
-<!-- Blur -->
+<!-- BLUR -->
 
 <div class="card">
 
@@ -837,7 +837,7 @@ input[type="range"]{
 </div>
 
 
-<!-- Subtitle -->
+<!-- SUBTITLE -->
 
 <div class="card">
 
@@ -956,7 +956,7 @@ input[type="range"]{
 </div>
 
 
-<!-- Start -->
+<!-- START -->
 
 <button
   class="start"
@@ -975,7 +975,7 @@ input[type="range"]{
 </div>
 
 
-<!-- Processing -->
+<!-- PROCESSING -->
 
 <div
   class="card processing"
@@ -1119,9 +1119,6 @@ input[type="range"]{
    HKUN AI — FRONTEND
    ========================================= */
 
-
-/* Elements */
-
 const videoInput =
   document.getElementById("videoInput");
 
@@ -1147,10 +1144,22 @@ const logoPreview =
   document.getElementById("logoPreview");
 
 
-/* Backend */
+/* =========================================
+   BACKEND
+   ========================================= */
 
 const BACKEND_URL =
   "https://hkunai-backend.onrender.com";
+
+
+/* =========================================
+   MULTIPART SETTINGS
+   ========================================= */
+
+const CHUNK_SIZE =
+  16 * 1024 * 1024;
+
+const MAX_RETRY = 3;
 
 
 /* =========================================
@@ -1292,91 +1301,98 @@ logoInput.addEventListener(
 
 
 /* =========================================
-   REAL R2 UPLOAD
+   PROGRESS
    ========================================= */
 
-async function uploadVideoToR2(file){
+function setUploadProgress(
+  percent,
+  message
+){
 
-  /*
-   * GET method သုံးထားသည်။
-   *
-   * အရင် POST /api/upload-url မသုံးတော့ပါ။
-   *
-   * Samsung Browser CORS preflight
-   * ပြဿနာကို ရှောင်ရန် ဖြစ်သည်။
-   */
-
-  const params =
-    new URLSearchParams({
-
-      filename:
-        file.name,
-
-      contentType:
-        file.type ||
-        "video/mp4"
-
-    });
-
-
-  /* Get signed R2 upload URL */
-
-  const response =
-    await fetch(
-
-      BACKEND_URL +
-      "/api/upload-url-get?" +
-      params.toString()
-
+  const progress =
+    document.getElementById(
+      "progress"
     );
+
+  const percentEl =
+    document.getElementById(
+      "percent"
+    );
+
+  const stage =
+    document.querySelector(
+      ".stage-status"
+    );
+
+
+  if(progress){
+
+    progress.style.width =
+      Math.min(
+        100,
+        Math.max(
+          0,
+          percent
+        )
+      ) +
+      "%";
+
+  }
+
+
+  if(percentEl){
+
+    percentEl.textContent =
+      Math.round(
+        percent
+      ) +
+      "%";
+
+  }
+
+
+  if(stage){
+
+    stage.textContent =
+      message;
+
+    stage.className =
+      "stage-status active";
+
+  }
+
+}
+
+
+/* =========================================
+   READ SERVER JSON
+   ========================================= */
+
+async function readJSON(
+  response
+){
+
+  let data = {};
+
+  try{
+
+    data =
+      await response.json();
+
+  }catch(error){}
 
 
   if(!response.ok){
 
     throw new Error(
-      "R2 Upload URL မရပါ"
-    );
 
-  }
+      data.error ||
 
+      data.message ||
 
-  const data =
-    await response.json();
+      "Server Error: " +
+      response.status
 
-
-  /* Upload actual video to R2 */
-
-  const uploadResponse =
-    await fetch(
-
-      data.uploadUrl,
-
-      {
-
-        method:
-          "PUT",
-
-        headers: {
-
-          "Content-Type":
-            file.type ||
-            "video/mp4"
-
-        },
-
-        body:
-          file
-
-      }
-
-    );
-
-
-  if(!uploadResponse.ok){
-
-    throw new Error(
-      "R2 Upload မအောင်မြင်ပါ: " +
-      uploadResponse.status
     );
 
   }
@@ -1388,198 +1404,194 @@ async function uploadVideoToR2(file){
 
 
 /* =========================================
-   START AUTO RECAP
+   UPLOAD ONE PART
    ========================================= */
 
-async function startProduction(){
+async function uploadPart(
+  file,
+  uploadId,
+  partNumber,
+  start,
+  end
+){
 
-  /* Check video */
-
-  if(!videoInput.files.length){
-
-    alert(
-      "အရင်ဆုံး Movie Video တစ်ခု Upload လုပ်ပါ။"
-    );
-
-    return;
-
-  }
-
-
-  const file =
-    videoInput.files[0];
-
-
-  const processing =
-    document.getElementById(
-      "processing"
+  const blob =
+    file.slice(
+      start,
+      end
     );
 
 
-  const progress =
-    document.getElementById(
-      "progress"
-    );
+  for(
+    let attempt = 1;
+    attempt <= MAX_RETRY;
+    attempt++
+  ){
+
+    try{
+
+      const formData =
+        new FormData();
 
 
-  const percent =
-    document.getElementById(
-      "percent"
-    );
-
-
-  const stages =
-    document.querySelectorAll(
-      ".stage-status"
-    );
-
-
-  const button =
-    document.getElementById(
-      "startButton"
-    );
-
-
-  /* Show processing */
-
-  processing.style.display =
-    "block";
-
-
-  processing.scrollIntoView({
-    behavior:
-      "smooth"
-  });
-
-
-  /* Disable button */
-
-  button.disabled =
-    true;
-
-
-  button.textContent =
-    "☁️ UPLOADING TO R2...";
-
-
-  /* Reset */
-
-  progress.style.width =
-    "10%";
-
-  percent.textContent =
-    "10%";
-
-
-  stages.forEach(
-    function(stage){
-
-      stage.textContent =
-        "Waiting";
-
-      stage.className =
-        "stage-status";
-
-    }
-  );
-
-
-  stages[0].textContent =
-    "Uploading...";
-
-  stages[0].className =
-    "stage-status active";
-
-
-  try{
-
-
-    /* =====================================
-       Upload to R2
-       ===================================== */
-
-    const result =
-      await uploadVideoToR2(
-        file
+      formData.append(
+        "uploadId",
+        uploadId
       );
 
 
-    /* Upload complete */
-
-    progress.style.width =
-      "100%";
-
-    percent.textContent =
-      "100%";
-
-
-    stages[0].textContent =
-      "✓ Uploaded to R2";
-
-    stages[0].className =
-      "stage-status done";
+      formData.append(
+        "partNumber",
+        String(
+          partNumber
+        )
+      );
 
 
-    /* Success */
-
-    alert(
-
-      "✅ Video Upload အောင်မြင်ပါပြီ!\n\n" +
-
-      "R2 Key:\n" +
-
-      result.key
-
-    );
+      formData.append(
+        "part",
+        blob,
+        file.name
+      );
 
 
-    button.disabled =
-      false;
+      const response =
+        await fetch(
+
+          BACKEND_URL +
+          "/api/upload-part",
+
+          {
+            method:
+              "POST",
+
+            body:
+              formData
+
+          }
+
+        );
 
 
-    button.textContent =
-      "🚀 START AUTO RECAP";
+      return await readJSON(
+        response
+      );
 
 
-  }
+    }catch(error){
 
-  catch(error){
+      console.warn(
 
+        "Part " +
+        partNumber +
+        " attempt " +
+        attempt +
+        " failed:",
 
-    console.error(
-      "HKUN AI Upload Error:",
-      error
-    );
+        error
 
-
-    stages[0].textContent =
-      "❌ Upload Failed";
-
-    stages[0].className =
-      "stage-status active";
+      );
 
 
-    button.disabled =
-      false;
+      if(
+        attempt ===
+        MAX_RETRY
+      ){
+
+        throw error;
+
+      }
 
 
-    button.textContent =
-      "🚀 START AUTO RECAP";
+      await new Promise(
+        function(resolve){
 
+          setTimeout(
 
-    alert(
+            resolve,
 
-      "❌ R2 Upload မအောင်မြင်ပါ\n\n" +
+            1500 *
+            attempt
 
-      error.message
+          );
 
-    );
+        }
+      );
+
+    }
 
   }
 
 }
 
-</script>
 
-</body>
-</html>
+/* =========================================
+   R2 MULTIPART UPLOAD
+   ========================================= */
+
+async function uploadVideoToR2(
+  file
+){
+
+  setUploadProgress(
+    1,
+    "Preparing upload..."
+  );
+
+
+  /* INIT */
+
+  const initResponse =
+    await fetch(
+
+      BACKEND_URL +
+      "/api/upload-init",
+
+      {
+
+        method:
+          "POST",
+
+        headers:{
+          "Content-Type":
+            "application/json"
+        },
+
+        body:
+          JSON.stringify({
+
+            filename:
+              file.name,
+
+            contentType:
+              file.type ||
+              "video/mp4",
+
+            fileSize:
+              file.size
+
+          })
+
+      }
+
+    );
+
+
+  const init =
+    await readJSON(
+      initResponse
+    );
+
+
+  if(
+    !init.uploadId
+  ){
+
+    throw new Error(
+      "Upload session မရပါ"
+    );
+
+  }
+
+
+  const uploa
