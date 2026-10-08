@@ -26,7 +26,6 @@ body{
   padding-bottom:40px;
 }
 
-/* Header */
 .header{
   padding:20px 18px;
   display:flex;
@@ -54,7 +53,6 @@ body{
   color:#8f96a3;
 }
 
-/* Main */
 .main{
   padding:20px 16px;
 }
@@ -75,7 +73,6 @@ body{
   line-height:1.6;
 }
 
-/* Cards */
 .card{
   background:#11131a;
   border:1px solid #242733;
@@ -118,7 +115,6 @@ select:focus{
   margin-bottom:15px;
 }
 
-/* Upload */
 .upload{
   border:2px dashed #343844;
   border-radius:14px;
@@ -156,14 +152,12 @@ select:focus{
   line-height:1.7;
 }
 
-/* Grid */
 .grid{
   display:grid;
   grid-template-columns:1fr 1fr;
   gap:12px;
 }
 
-/* Speed */
 .speed-value{
   color:#ff5b52;
   font-weight:bold;
@@ -174,7 +168,6 @@ input[type="range"]{
   accent-color:#ff3b30;
 }
 
-/* Logo */
 .logo-preview{
   margin-top:10px;
   display:none;
@@ -183,7 +176,6 @@ input[type="range"]{
   border-radius:8px;
 }
 
-/* Toggle */
 .row{
   display:flex;
   align-items:center;
@@ -230,7 +222,6 @@ input[type="range"]{
   transform:translateX(21px);
 }
 
-/* Button */
 .start{
   width:100%;
   border:0;
@@ -248,6 +239,11 @@ input[type="range"]{
   transform:scale(.98);
 }
 
+.start:disabled{
+  opacity:.7;
+  cursor:not-allowed;
+}
+
 .note{
   text-align:center;
   color:#777e8b;
@@ -256,7 +252,6 @@ input[type="range"]{
   line-height:1.6;
 }
 
-/* Processing */
 .processing{
   display:none;
 }
@@ -300,7 +295,6 @@ input[type="range"]{
   color:#4cd964;
 }
 
-/* Footer */
 .footer{
   text-align:center;
   color:#555b67;
@@ -309,6 +303,7 @@ input[type="range"]{
 }
 
 @media(max-width:400px){
+
   .grid{
     grid-template-columns:1fr;
   }
@@ -316,6 +311,7 @@ input[type="range"]{
   .hero h1{
     font-size:24px;
   }
+
 }
 </style>
 </head>
@@ -325,30 +321,53 @@ input[type="range"]{
 <div class="app">
 
 <header class="header">
-  <div class="brand">HKUN <span>AI</span></div>
-  <div class="status">AUTO RECAP</div>
+
+  <div class="brand">
+    HKUN <span>AI</span>
+  </div>
+
+  <div class="status">
+    AUTO RECAP
+  </div>
+
 </header>
 
 <main class="main">
 
 <section class="hero">
-  <h1>Myanmar Movie Recap</h1>
+
+  <h1>
+    Myanmar Movie Recap
+  </h1>
+
   <p>
     ရုပ်ရှင်ဗီဒီယိုကို Upload လုပ်ပြီး<br>
     မြန်မာဘာသာဖြင့် Original Recap ဖန်တီးပါ။
   </p>
+
 </section>
 
-<!-- Upload -->
+
+<!-- Video Upload -->
+
 <div class="card">
 
-  <div class="card-title">🎬 Video Upload</div>
+  <div class="card-title">
+    🎬 Video Upload
+  </div>
 
-  <label for="videoInput" class="upload">
+  <label
+    for="videoInput"
+    class="upload"
+  >
 
-    <div class="upload-icon">🎞️</div>
+    <div class="upload-icon">
+      🎞️
+    </div>
 
-    <strong>Movie Video ရွေးပါ</strong>
+    <strong>
+      Movie Video ရွေးပါ
+    </strong>
 
     <small>
       MP4 / MOV / MKV • အများဆုံး 120 မိနစ်
@@ -362,24 +381,46 @@ input[type="range"]{
     accept="video/*"
   >
 
-  <div id="fileInfo" class="file-info"></div>
+  <div
+    id="fileInfo"
+    class="file-info"
+  ></div>
 
 </div>
 
+
 <!-- Voice -->
+
 <div class="card">
 
-  <div class="card-title">🇲🇲 Myanmar Voice</div>
+  <div class="card-title">
+    🇲🇲 Myanmar Voice
+  </div>
 
   <div class="field">
 
-    <label>Voice</label>
+    <label>
+      Voice
+    </label>
 
     <select id="voice">
-      <option>Myanmar Male 01</option>
-      <option>Myanmar Male 02</option>
-      <option>Myanmar Female 01</option>
-      <option>Myanmar Female 02</option>
+
+      <option>
+        Myanmar Male 01
+      </option>
+
+      <option>
+        Myanmar Male 02
+      </option>
+
+      <option>
+        Myanmar Female 01
+      </option>
+
+      <option>
+        Myanmar Female 02
+      </option>
+
     </select>
 
   </div>
@@ -387,10 +428,16 @@ input[type="range"]{
   <div class="field">
 
     <label>
+
       Voice Speed:
-      <span class="speed-value" id="voiceSpeedText">
+
+      <span
+        class="speed-value"
+        id="voiceSpeedText"
+      >
         1.00×
       </span>
+
     </label>
 
     <input
@@ -406,46 +453,97 @@ input[type="range"]{
 
 </div>
 
+
 <!-- Recap -->
+
 <div class="card">
 
-  <div class="card-title">🧠 Recap Style</div>
+  <div class="card-title">
+    🧠 Recap Style
+  </div>
 
   <select id="style">
 
-    <option>Movie Recap</option>
-    <option>Detailed Movie Recap</option>
-    <option>Fast Recap</option>
-    <option>Emotional Recap</option>
-    <option>Action Recap</option>
-    <option>Horror Recap</option>
-    <option>Drama Recap</option>
+    <option>
+      Movie Recap
+    </option>
+
+    <option>
+      Detailed Movie Recap
+    </option>
+
+    <option>
+      Fast Recap
+    </option>
+
+    <option>
+      Emotional Recap
+    </option>
+
+    <option>
+      Action Recap
+    </option>
+
+    <option>
+      Horror Recap
+    </option>
+
+    <option>
+      Drama Recap
+    </option>
 
   </select>
 
 </div>
 
+
 <!-- Video Settings -->
+
 <div class="card">
 
-  <div class="card-title">🎞️ Video Settings</div>
+  <div class="card-title">
+    🎞️ Video Settings
+  </div>
 
   <div class="field">
 
     <label>
+
       Original Video Speed:
-      <span class="speed-value" id="videoSpeedText">
+
+      <span
+        class="speed-value"
+        id="videoSpeedText"
+      >
         0.85×
       </span>
+
     </label>
 
     <select id="videoSpeed">
 
-      <option value="0.75">0.75×</option>
-      <option value="0.80">0.80×</option>
-      <option value="0.85" selected>0.85×</option>
-      <option value="0.90">0.90×</option>
-      <option value="1.00">1.00×</option>
+      <option value="0.75">
+        0.75×
+      </option>
+
+      <option value="0.80">
+        0.80×
+      </option>
+
+      <option
+        value="0.85"
+        selected
+      >
+        0.85×
+      </option>
+
+      <option value="0.90">
+        0.90×
+      </option>
+
+      <option value="1.00">
+        1.00×
+      </option>
 
     </select>
 
@@ -455,15 +553,31 @@ input[type="range"]{
 
     <div class="field">
 
-      <label>Aspect Ratio</label>
+      <label>
+        Aspect Ratio
+      </label>
 
       <select id="aspect">
 
-        <option>Original</option>
-        <option>16:9</option>
-        <option>9:16</option>
-        <option>4:5</option>
-        <option>1:1</option>
+        <option>
+          Original
+        </option>
+
+        <option>
+          16:9
+        </option>
+
+        <option>
+          9:16
+        </option>
+
+        <option>
+          4:5
+        </option>
+
+        <option>
+          1:1
+        </option>
 
       </select>
 
@@ -471,12 +585,19 @@ input[type="range"]{
 
     <div class="field">
 
-      <label>Resolution</label>
+      <label>
+        Resolution
+      </label>
 
-      <select>
+      <select id="resolution">
 
-        <option>1080p</option>
-        <option>720p</option>
+        <option>
+          1080p
+        </option>
+
+        <option>
+          720p
+        </option>
 
       </select>
 
@@ -486,17 +607,39 @@ input[type="range"]{
 
   <div class="field">
 
-    <label>Video Scale / Zoom</label>
+    <label>
+      Video Scale / Zoom
+    </label>
 
-    <select>
+    <select id="videoScale">
 
-      <option>Auto Fit</option>
-      <option>Fill</option>
-      <option>Original</option>
-      <option>110%</option>
-      <option>120%</option>
-      <option>130%</option>
-      <option>140%</option>
+      <option>
+        Auto Fit
+      </option>
+
+      <option>
+        Fill
+      </option>
+
+      <option>
+        Original
+      </option>
+
+      <option>
+        110%
+      </option>
+
+      <option>
+        120%
+      </option>
+
+      <option>
+        130%
+      </option>
+
+      <option>
+        140%
+      </option>
 
     </select>
 
@@ -504,14 +647,20 @@ input[type="range"]{
 
 </div>
 
+
 <!-- Logo -->
+
 <div class="card">
 
-  <div class="card-title">🔰 Logo</div>
+  <div class="card-title">
+    🔰 Logo
+  </div>
 
   <div class="field">
 
-    <label>Logo Upload</label>
+    <label>
+      Logo Upload
+    </label>
 
     <input
       id="logoInput"
@@ -530,26 +679,56 @@ input[type="range"]{
 
     <div class="field">
 
-      <label>Position</label>
+      <label>
+        Position
+      </label>
 
-      <select>
-        <option>Top Left</option>
-        <option>Top Right</option>
-        <option>Bottom Left</option>
-        <option>Bottom Right</option>
+      <select id="logoPosition">
+
+        <option>
+          Top Left
+        </option>
+
+        <option>
+          Top Right
+        </option>
+
+        <option>
+          Bottom Left
+        </option>
+
+        <option>
+          Bottom Right
+        </option>
+
       </select>
 
     </div>
 
     <div class="field">
 
-      <label>Opacity</label>
+      <label>
+        Opacity
+      </label>
 
-      <select>
-        <option>100%</option>
-        <option>80%</option>
-        <option>60%</option>
-        <option>40%</option>
+      <select id="logoOpacity">
+
+        <option>
+          100%
+        </option>
+
+        <option>
+          80%
+        </option>
+
+        <option>
+          60%
+        </option>
+
+        <option>
+          40%
+        </option>
+
       </select>
 
     </div>
@@ -558,23 +737,41 @@ input[type="range"]{
 
 </div>
 
+
 <!-- Blur -->
+
 <div class="card">
 
-  <div class="card-title">🪄 Original Text / Object Removal</div>
+  <div class="card-title">
+    🪄 Original Text / Object Removal
+  </div>
 
   <div class="row">
 
     <div>
-      <strong>AI Auto Detect</strong>
-      <div style="font-size:11px;color:#777e8b;margin-top:4px">
+
+      <strong>
+        AI Auto Detect
+      </strong>
+
+      <div
+        style="font-size:11px;color:#777e8b;margin-top:4px"
+      >
         Subtitle / watermark / unwanted object
       </div>
+
     </div>
 
     <label class="switch">
-      <input type="checkbox" checked>
+
+      <input
+        id="autoDetect"
+        type="checkbox"
+        checked
+      >
+
       <span class="slider"></span>
+
     </label>
 
   </div>
@@ -582,62 +779,122 @@ input[type="range"]{
   <div class="row">
 
     <div>
-      <strong>Object Tracking</strong>
-      <div style="font-size:11px;color:#777e8b;margin-top:4px">
+
+      <strong>
+        Object Tracking
+      </strong>
+
+      <div
+        style="font-size:11px;color:#777e8b;margin-top:4px"
+      >
         Moving object ကို လိုက်ပြီး Blur ပြုလုပ်မည်
       </div>
+
     </div>
 
     <label class="switch">
-      <input type="checkbox" checked>
+
+      <input
+        id="objectTracking"
+        type="checkbox"
+        checked
+      >
+
       <span class="slider"></span>
+
     </label>
 
   </div>
 
   <div class="field">
 
-    <label>Blur Strength</label>
+    <label>
+      Blur Strength
+    </label>
 
-    <select>
-      <option>Medium</option>
-      <option>Light</option>
-      <option>Strong</option>
-      <option>Very Strong</option>
+    <select id="blurStrength">
+
+      <option>
+        Medium
+      </option>
+
+      <option>
+        Light
+      </option>
+
+      <option>
+        Strong
+      </option>
+
+      <option>
+        Very Strong
+      </option>
+
     </select>
 
   </div>
 
 </div>
 
+
 <!-- Subtitle -->
+
 <div class="card">
 
-  <div class="card-title">💬 Myanmar Subtitle</div>
+  <div class="card-title">
+    💬 Myanmar Subtitle
+  </div>
 
   <div class="grid">
 
     <div class="field">
 
-      <label>Font</label>
+      <label>
+        Font
+      </label>
 
-      <select>
-        <option>Noto Sans Myanmar</option>
-        <option>Myanmar Text</option>
-        <option>Pyidaungsu</option>
+      <select id="subtitleFont">
+
+        <option>
+          Noto Sans Myanmar
+        </option>
+
+        <option>
+          Myanmar Text
+        </option>
+
+        <option>
+          Pyidaungsu
+        </option>
+
       </select>
 
     </div>
 
     <div class="field">
 
-      <label>Size</label>
+      <label>
+        Size
+      </label>
 
-      <select>
-        <option>Medium</option>
-        <option>Small</option>
-        <option>Large</option>
-        <option>Extra Large</option>
+      <select id="subtitleSize">
+
+        <option>
+          Medium
+        </option>
+
+        <option>
+          Small
+        </option>
+
+        <option>
+          Large
+        </option>
+
+        <option>
+          Extra Large
+        </option>
+
       </select>
 
     </div>
@@ -648,24 +905,48 @@ input[type="range"]{
 
     <div class="field">
 
-      <label>Text Color</label>
+      <label>
+        Text Color
+      </label>
 
-      <select>
-        <option>White</option>
-        <option>Yellow</option>
-        <option>Green</option>
+      <select id="subtitleColor">
+
+        <option>
+          White
+        </option>
+
+        <option>
+          Yellow
+        </option>
+
+        <option>
+          Green
+        </option>
+
       </select>
 
     </div>
 
     <div class="field">
 
-      <label>Style</label>
+      <label>
+        Style
+      </label>
 
-      <select>
-        <option>Bold + Outline</option>
-        <option>Normal</option>
-        <option>Shadow</option>
+      <select id="subtitleStyle">
+
+        <option>
+          Bold + Outline
+        </option>
+
+        <option>
+          Normal
+        </option>
+
+        <option>
+          Shadow
+        </option>
+
       </select>
 
     </div>
@@ -674,75 +955,149 @@ input[type="range"]{
 
 </div>
 
+
 <!-- Start -->
+
 <button
   class="start"
+  id="startButton"
   onclick="startProduction()"
 >
   🚀 START AUTO RECAP
 </button>
 
 <div class="note">
+
   HKUN AI • Myanmar Original Movie Recap<br>
+
   Audio Timeline ကို Master Timeline အဖြစ် အသုံးပြုမည်
+
 </div>
 
+
 <!-- Processing -->
-<div class="card processing" id="processing">
+
+<div
+  class="card processing"
+  id="processing"
+>
 
   <div class="card-title">
     ⚙️ Production Progress
   </div>
 
   <div class="progress-box">
-    <div class="progress" id="progress"></div>
+
+    <div
+      class="progress"
+      id="progress"
+    ></div>
+
   </div>
 
-  <div id="percent"
-       style="text-align:center;font-size:13px;color:#aaa">
+  <div
+    id="percent"
+    style="text-align:center;font-size:13px;color:#aaa"
+  >
     0%
   </div>
 
   <div style="margin-top:15px">
 
     <div class="stage">
-      <span>🎬 Video Analysis</span>
-      <span class="stage-status">Waiting</span>
+
+      <span>
+        🎬 Video Analysis
+      </span>
+
+      <span class="stage-status">
+        Waiting
+      </span>
+
     </div>
 
     <div class="stage">
-      <span>🧠 Story Understanding</span>
-      <span class="stage-status">Waiting</span>
+
+      <span>
+        🧠 Story Understanding
+      </span>
+
+      <span class="stage-status">
+        Waiting
+      </span>
+
     </div>
 
     <div class="stage">
-      <span>✍️ Recap Script</span>
-      <span class="stage-status">Waiting</span>
+
+      <span>
+        ✍️ Recap Script
+      </span>
+
+      <span class="stage-status">
+        Waiting
+      </span>
+
     </div>
 
     <div class="stage">
-      <span>🇲🇲 Myanmar Voice</span>
-      <span class="stage-status">Waiting</span>
+
+      <span>
+        🇲🇲 Myanmar Voice
+      </span>
+
+      <span class="stage-status">
+        Waiting
+      </span>
+
     </div>
 
     <div class="stage">
-      <span>🎯 Scene Matching</span>
-      <span class="stage-status">Waiting</span>
+
+      <span>
+        🎯 Scene Matching
+      </span>
+
+      <span class="stage-status">
+        Waiting
+      </span>
+
     </div>
 
     <div class="stage">
-      <span>🎞️ Audio / Video Sync</span>
-      <span class="stage-status">Waiting</span>
+
+      <span>
+        🎞️ Audio / Video Sync
+      </span>
+
+      <span class="stage-status">
+        Waiting
+      </span>
+
     </div>
 
     <div class="stage">
-      <span>💬 Subtitle</span>
-      <span class="stage-status">Waiting</span>
+
+      <span>
+        💬 Subtitle
+      </span>
+
+      <span class="stage-status">
+        Waiting
+      </span>
+
     </div>
 
     <div class="stage">
-      <span>🎬 Final Rendering</span>
-      <span class="stage-status">Waiting</span>
+
+      <span>
+        🎬 Final Rendering
+      </span>
+
+      <span class="stage-status">
+        Waiting
+      </span>
+
     </div>
 
   </div>
@@ -757,7 +1112,15 @@ input[type="range"]{
 
 </div>
 
+
 <script>
+
+/* =========================================
+   HKUN AI — FRONTEND
+   ========================================= */
+
+
+/* Elements */
 
 const videoInput =
   document.getElementById("videoInput");
@@ -784,306 +1147,438 @@ const logoPreview =
   document.getElementById("logoPreview");
 
 
-/* Video Upload */
-
-videoInput.addEventListener("change",function(){
-
-  const file=this.files[0];
-
-  if(!file) return;
-
-  const sizeMB =
-    (file.size / 1024 / 1024).toFixed(1);
-
-  const video =
-    document.createElement("video");
-
-  video.preload="metadata";
-
-  video.onloadedmetadata=function(){
-
-    const duration =
-      Math.round(video.duration);
-
-    const minutes =
-      Math.floor(duration/60);
-
-    const seconds =
-      duration%60;
-
-    fileInfo.style.display="block";
-
-    fileInfo.innerHTML=
-      "🎬 <b>"+file.name+"</b><br>"+
-      "⏱️ Duration: "+
-      minutes+"m "+seconds+"s<br>"+
-      "💾 Size: "+sizeMB+" MB";
-
-    URL.revokeObjectURL(video.src);
-
-  };
-
-  video.src=
-    URL.createObjectURL(file);
-
-});
-
-
-/* Voice Speed */
-
-voiceSpeed.addEventListener("input",function(){
-
-  voiceSpeedText.textContent=
-    Number(this.value).toFixed(2)+"×";
-
-});
-
-
-/* Video Speed */
-
-videoSpeed.addEventListener("change",function(){
-
-  videoSpeedText.textContent=
-    this.value+"×";
-
-});
-
-
-/* Logo */
-
-logoInput.addEventListener("change",function(){
-
-  const file=this.files[0];
-
-  if(!file) return;
-
-  logoPreview.src=
-    URL.createObjectURL(file);
-
-  logoPreview.style.display="block";
-
-});
-
-
-/* Demo Processing */
-
-function startProduction(){
-
-  if(!videoInput.files.length){
-
-    alert("အရင်ဆုံး Movie Video တစ်ခု Upload လုပ်ပါ။");
-
-    return;
-
-  }
-
-  const processing =
-    document.getElementById("processing");
-
-  processing.style.display="block";
-
-  processing.scrollIntoView({
-    behavior:"smooth"
-  });
-
-  const progress =
-    document.getElementById("progress");
-
-  const percent =
-    document.getElementById("percent");
-
-  const stages =
-    document.querySelectorAll(".stage-status");
-
-  let current=0;
-
-  const timer =
-    setInterval(function(){
-
-      current++;
-
-      if(current>100){
-
-        clearInterval(timer);
-        return;
-
-      }
-
-      progress.style.width=
-        current+"%";
-
-      percent.textContent=
-        current+"%";
-
-      const stageIndex=
-        Math.min(
-          stages.length-1,
-          Math.floor(current /
-          (100/stages.length))
-        );
-
-      stages.forEach(function(s,i){
-
-        if(i<stageIndex){
-          s.textContent="✓ Done";
-          s.className="stage-status done";
-        }
-
-        else if(i===stageIndex){
-          s.textContent="Processing...";
-          s.className="stage-status active";
-        }
-
-      });
-
-    },100);
-
-}
-/* HKUN AI - Real R2 Upload */
+/* Backend */
 
 const BACKEND_URL =
   "https://hkunai-backend.onrender.com";
 
-async function uploadVideoToR2(file) {
 
-  const response = await fetch(
-    BACKEND_URL + "/api/upload-url",
-    {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({
-        filename: file.name,
-        contentType: file.type || "video/mp4"
-      })
+/* =========================================
+   VIDEO INFORMATION
+   ========================================= */
+
+videoInput.addEventListener(
+  "change",
+  function(){
+
+    const file =
+      this.files[0];
+
+    if(!file){
+      return;
     }
-  );
 
-  if (!response.ok) {
-    throw new Error("R2 Upload URL မရပါ");
+    const sizeMB =
+      (
+        file.size /
+        1024 /
+        1024
+      ).toFixed(1);
+
+    const video =
+      document.createElement("video");
+
+    video.preload =
+      "metadata";
+
+    video.onloadedmetadata =
+      function(){
+
+        const duration =
+          Math.round(
+            video.duration
+          );
+
+        const minutes =
+          Math.floor(
+            duration / 60
+          );
+
+        const seconds =
+          duration % 60;
+
+        fileInfo.style.display =
+          "block";
+
+        fileInfo.innerHTML =
+          "🎬 <b>" +
+          file.name +
+          "</b><br>" +
+
+          "⏱️ Duration: " +
+          minutes +
+          "m " +
+          seconds +
+          "s<br>" +
+
+          "💾 Size: " +
+          sizeMB +
+          " MB";
+
+        URL.revokeObjectURL(
+          video.src
+        );
+
+      };
+
+    video.src =
+      URL.createObjectURL(
+        file
+      );
+
+  }
+);
+
+
+/* =========================================
+   VOICE SPEED
+   ========================================= */
+
+voiceSpeed.addEventListener(
+  "input",
+  function(){
+
+    voiceSpeedText.textContent =
+      Number(
+        this.value
+      ).toFixed(2) +
+      "×";
+
+  }
+);
+
+
+/* =========================================
+   VIDEO SPEED
+   ========================================= */
+
+videoSpeed.addEventListener(
+  "change",
+  function(){
+
+    videoSpeedText.textContent =
+      this.value +
+      "×";
+
+  }
+);
+
+
+/* =========================================
+   LOGO PREVIEW
+   ========================================= */
+
+logoInput.addEventListener(
+  "change",
+  function(){
+
+    const file =
+      this.files[0];
+
+    if(!file){
+      return;
+    }
+
+    logoPreview.src =
+      URL.createObjectURL(
+        file
+      );
+
+    logoPreview.style.display =
+      "block";
+
+  }
+);
+
+
+/* =========================================
+   REAL R2 UPLOAD
+   ========================================= */
+
+async function uploadVideoToR2(file){
+
+  /*
+   * GET method သုံးထားသည်။
+   *
+   * အရင် POST /api/upload-url မသုံးတော့ပါ။
+   *
+   * Samsung Browser CORS preflight
+   * ပြဿနာကို ရှောင်ရန် ဖြစ်သည်။
+   */
+
+  const params =
+    new URLSearchParams({
+
+      filename:
+        file.name,
+
+      contentType:
+        file.type ||
+        "video/mp4"
+
+    });
+
+
+  /* Get signed R2 upload URL */
+
+  const response =
+    await fetch(
+
+      BACKEND_URL +
+      "/api/upload-url-get?" +
+      params.toString()
+
+    );
+
+
+  if(!response.ok){
+
+    throw new Error(
+      "R2 Upload URL မရပါ"
+    );
+
   }
 
-  const data = await response.json();
 
-  const uploadResponse = await fetch(
-    data.uploadUrl,
-    {
-      method: "PUT",
-      headers: {
-        "Content-Type": file.type || "video/mp4"
-      },
-      body: file
-    }
-  );
+  const data =
+    await response.json();
 
-  if (!uploadResponse.ok) {
+
+  /* Upload actual video to R2 */
+
+  const uploadResponse =
+    await fetch(
+
+      data.uploadUrl,
+
+      {
+
+        method:
+          "PUT",
+
+        headers: {
+
+          "Content-Type":
+            file.type ||
+            "video/mp4"
+
+        },
+
+        body:
+          file
+
+      }
+
+    );
+
+
+  if(!uploadResponse.ok){
+
     throw new Error(
       "R2 Upload မအောင်မြင်ပါ: " +
       uploadResponse.status
     );
+
   }
 
+
   return data;
+
 }
 
 
-/* Replace Demo Production */
+/* =========================================
+   START AUTO RECAP
+   ========================================= */
 
-startProduction = async function () {
+async function startProduction(){
 
-  if (!videoInput.files.length) {
+  /* Check video */
+
+  if(!videoInput.files.length){
 
     alert(
       "အရင်ဆုံး Movie Video တစ်ခု Upload လုပ်ပါ။"
     );
 
     return;
+
   }
+
 
   const file =
     videoInput.files[0];
 
+
   const processing =
-    document.getElementById("processing");
+    document.getElementById(
+      "processing"
+    );
+
 
   const progress =
-    document.getElementById("progress");
+    document.getElementById(
+      "progress"
+    );
+
 
   const percent =
-    document.getElementById("percent");
+    document.getElementById(
+      "percent"
+    );
+
 
   const stages =
-    document.querySelectorAll(".stage-status");
+    document.querySelectorAll(
+      ".stage-status"
+    );
+
 
   const button =
-    document.querySelector(".start");
+    document.getElementById(
+      "startButton"
+    );
 
-  processing.style.display = "block";
+
+  /* Show processing */
+
+  processing.style.display =
+    "block";
+
 
   processing.scrollIntoView({
-    behavior: "smooth"
+    behavior:
+      "smooth"
   });
 
-  button.disabled = true;
+
+  /* Disable button */
+
+  button.disabled =
+    true;
+
+
   button.textContent =
     "☁️ UPLOADING TO R2...";
 
-  progress.style.width = "10%";
-  percent.textContent = "10%";
 
-  stages.forEach(function (s) {
-    s.textContent = "Waiting";
-    s.className = "stage-status";
-  });
+  /* Reset */
+
+  progress.style.width =
+    "10%";
+
+  percent.textContent =
+    "10%";
+
+
+  stages.forEach(
+    function(stage){
+
+      stage.textContent =
+        "Waiting";
+
+      stage.className =
+        "stage-status";
+
+    }
+  );
+
 
   stages[0].textContent =
     "Uploading...";
+
   stages[0].className =
     "stage-status active";
 
-  try {
+
+  try{
+
+
+    /* =====================================
+       Upload to R2
+       ===================================== */
 
     const result =
-      await uploadVideoToR2(file);
+      await uploadVideoToR2(
+        file
+      );
 
-    progress.style.width = "100%";
-    percent.textContent = "100%";
+
+    /* Upload complete */
+
+    progress.style.width =
+      "100%";
+
+    percent.textContent =
+      "100%";
+
 
     stages[0].textContent =
       "✓ Uploaded to R2";
+
     stages[0].className =
       "stage-status done";
 
+
+    /* Success */
+
     alert(
+
       "✅ Video Upload အောင်မြင်ပါပြီ!\n\n" +
+
       "R2 Key:\n" +
+
       result.key
+
     );
 
-    button.disabled = false;
+
+    button.disabled =
+      false;
+
+
     button.textContent =
       "🚀 START AUTO RECAP";
 
-  } catch (error) {
 
-    console.error(error);
+  }
+
+  catch(error){
+
+
+    console.error(
+      "HKUN AI Upload Error:",
+      error
+    );
+
 
     stages[0].textContent =
       "❌ Upload Failed";
+
     stages[0].className =
       "stage-status active";
 
-    button.disabled = false;
+
+    button.disabled =
+      false;
+
+
     button.textContent =
       "🚀 START AUTO RECAP";
 
+
     alert(
+
       "❌ R2 Upload မအောင်မြင်ပါ\n\n" +
+
       error.message
+
     );
+
   }
-};
+
+}
+
 </script>
 
 </body>
