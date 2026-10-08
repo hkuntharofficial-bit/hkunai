@@ -1244,157 +1244,303 @@ throw error;
 
 
 /* =====================================
-   START
+   GEMINI VIDEO ANALYSIS
+===================================== */
+
+async function analyzeVideo(
+  videoKey,
+  mimeType,
+  recapStyle
+){
+
+  const response =
+    await fetch(
+      BACKEND +
+      "/api/analyze-video",
+      {
+        method: "POST",
+
+        headers: {
+          "Content-Type":
+            "application/json"
+        },
+
+        body: JSON.stringify({
+
+          key:
+            videoKey,
+
+          mimeType:
+            mimeType ||
+            "video/mp4",
+
+          prompt: `
+You are HKUN AI, a professional Myanmar Movie Recap video analyst.
+
+Recap Style:
+${recapStyle}
+
+Analyze the ACTUAL video carefully.
+
+Do NOT invent any event, character,
+location, dialogue, relationship,
+or information.
+
+Identify the important story events
+in chronological order.
+
+For every important event provide:
+
+- Approximate video timestamp
+- What actually happens
+- Important characters
+- Important visual scene
+- Why the scene matters
+
+Focus on scenes that can later be
+matched with Myanmar narration.
+
+Maintain the original story chronology
+and continuity.
+
+Return clear chronological analysis.
+
+The analysis will later be used for:
+
+1. Myanmar Original Movie Recap
+2. Recap Script Generation
+3. Semantic Scene Matching
+4. Audio / Video Synchronization
+5. Selecting relevant original footage
+
+Only describe information supported
+by the actual video.
+`
+        })
+      }
+    );
+
+  return await readJSON(
+    response
+  );
+}
+
+
+/* =====================================
+   START AUTO RECAP
 ===================================== */
 
 startButton.addEventListener(
-"click",
-async function(){
+  "click",
+  async function(){
 
-const file =
-videoInput.files[0];
+    const file =
+      videoInput.files[0];
 
-if(!file){
+    if(!file){
 
-alert(
-"အရင်ဆုံး Movie Video တစ်ခု ရွေးပါ။"
+      alert(
+        "အရင်ဆုံး Movie Video တစ်ခု ရွေးပါ။"
+      );
+
+      return;
+    }
+
+
+    /* Maximum 5GB */
+
+    if(
+      file.size >
+      5 *
+      1024 *
+      1024 *
+      1024
+    ){
+
+      alert(
+        "Video size 5 GB ထက် မကျော်ရပါ။"
+      );
+
+      return;
+    }
+
+
+    processing.style.display =
+      "block";
+
+    processing.scrollIntoView({
+      behavior:
+        "smooth"
+    });
+
+    startButton.disabled =
+      true;
+
+    startButton.textContent =
+      "☁️ UPLOADING VIDEO...";
+
+    progress.style.width =
+      "0%";
+
+    percent.textContent =
+      "0%";
+
+    stages.forEach(
+      function(s){
+
+        s.textContent =
+          "Waiting";
+
+        s.className =
+          "stage-status";
+
+      }
+    );
+
+    errorBox.style.display =
+      "none";
+
+
+    try{
+
+      /* =================================
+         STEP 1 — R2 UPLOAD
+      ================================= */
+
+      stages[0].textContent =
+        "Uploading to R2...";
+
+      stages[0].className =
+        "stage-status active";
+
+
+      const result =
+        await uploadVideo(
+          file
+        );
+
+
+      window.hkunUploadedVideo =
+        result;
+
+      window.hkunUploadKey =
+        result.key;
+
+
+      stages[0].textContent =
+        "✓ Video uploaded";
+
+      stages[0].className =
+        "stage-status done";
+
+
+      /* =================================
+         STEP 2 — GEMINI VIDEO ANALYSIS
+      ================================= */
+
+      stages[1].textContent =
+        "Analyzing actual video...";
+
+      stages[1].className =
+        "stage-status active";
+
+
+      const recapStyle =
+        document.getElementById(
+          "style"
+        ).value;
+
+
+      const analysis =
+        await analyzeVideo(
+
+          result.key,
+
+          file.type ||
+            "video/mp4",
+
+          recapStyle
+
+        );
+
+
+      window.hkunGeminiAnalysis =
+        analysis;
+
+
+      stages[1].textContent =
+        "✓ Video analysis completed";
+
+      stages[1].className =
+        "stage-status done";
+
+
+      console.log(
+        "HKUN AI Gemini Analysis:",
+        analysis.analysis
+      );
+
+
+      alert(
+        "✅ Gemini Video Analysis အောင်မြင်ပါပြီ!\n\n" +
+        "Video ကို Gemini က ကြည့်ပြီး " +
+        "Story / Scene Analysis ပြန်ရပါပြီ။"
+      );
+
+
+      startButton.disabled =
+        false;
+
+      startButton.textContent =
+        "🚀 START AUTO RECAP";
+
+
+    }catch(error){
+
+      console.error(
+        "HKUN AI ERROR:",
+        error
+      );
+
+
+      stages[0].textContent =
+        "❌ Processing Failed";
+
+      stages[0].className =
+        "stage-status active";
+
+
+      errorBox.style.display =
+        "block";
+
+
+      errorBox.innerHTML =
+        "❌ " +
+        esc(
+          error.message ||
+          String(error)
+        );
+
+
+      startButton.disabled =
+        false;
+
+      startButton.textContent =
+        "🚀 START AUTO RECAP";
+
+
+      alert(
+        "❌ Auto Recap မအောင်မြင်ပါ\n\n" +
+        (
+          error.message ||
+          String(error)
+        )
+      );
+
+    }
+
+  }
 );
-
-return;
-
-}
-
-
-/* Maximum 5GB */
-
-if(
-file.size>
-5*
-1024*
-1024*
-1024
-){
-
-alert(
-"Video size 5 GB ထက် မကျော်ရပါ။"
-);
-
-return;
-
-}
-
-
-processing.style.display =
-"block";
-
-processing.scrollIntoView({
-behavior:"smooth"
-});
-
-startButton.disabled =
-true;
-
-startButton.textContent =
-"☁️ UPLOADING VIDEO...";
-
-progress.style.width =
-"0%";
-
-percent.textContent =
-"0%";
-
-stages.forEach(
-function(s){
-
-s.textContent =
-"Waiting";
-
-s.className =
-"stage-status";
-
-}
-);
-
-errorBox.style.display =
-"none";
-
-
-try{
-
-const result =
-await uploadVideo(
-file
-);
-
-window.hkunUploadedVideo =
-result;
-
-window.hkunUploadKey =
-result.key;
-
-stages[0].textContent =
-"✓ Uploaded to R2";
-
-stages[0].className =
-"stage-status done";
-
-startButton.disabled =
-false;
-
-startButton.textContent =
-"🚀 START AUTO RECAP";
-
-alert(
-
-"✅ Video Upload အောင်မြင်ပါပြီ!\n\n"+
-"R2 Key:\n"+
-result.key
-
-);
-
-
-}catch(error){
-
-console.error(
-"HKUN AI:",
-error
-);
-
-stages[0].textContent =
-"❌ Upload Failed";
-
-stages[0].className =
-"stage-status active";
-
-errorBox.style.display =
-"block";
-
-errorBox.innerHTML =
-"❌ "+
-esc(
-error.message ||
-String(error)
-);
-
-startButton.disabled =
-false;
-
-startButton.textContent =
-"🚀 START AUTO RECAP";
-
-alert(
-
-"❌ Upload မအောင်မြင်ပါ\n\n"+
-(
-error.message ||
-String(error)
-)
-
-);
-
-}
-
-});
 
 </script>
 
