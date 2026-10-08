@@ -939,7 +939,151 @@ function startProduction(){
     },100);
 
 }
+/* HKUN AI - Real R2 Upload */
 
+const BACKEND_URL =
+  "https://hkunai-backend.onrender.com";
+
+async function uploadVideoToR2(file) {
+
+  const response = await fetch(
+    BACKEND_URL + "/api/upload-url",
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        filename: file.name,
+        contentType: file.type || "video/mp4"
+      })
+    }
+  );
+
+  if (!response.ok) {
+    throw new Error("R2 Upload URL မရပါ");
+  }
+
+  const data = await response.json();
+
+  const uploadResponse = await fetch(
+    data.uploadUrl,
+    {
+      method: "PUT",
+      headers: {
+        "Content-Type": file.type || "video/mp4"
+      },
+      body: file
+    }
+  );
+
+  if (!uploadResponse.ok) {
+    throw new Error(
+      "R2 Upload မအောင်မြင်ပါ: " +
+      uploadResponse.status
+    );
+  }
+
+  return data;
+}
+
+
+/* Replace Demo Production */
+
+startProduction = async function () {
+
+  if (!videoInput.files.length) {
+
+    alert(
+      "အရင်ဆုံး Movie Video တစ်ခု Upload လုပ်ပါ။"
+    );
+
+    return;
+  }
+
+  const file =
+    videoInput.files[0];
+
+  const processing =
+    document.getElementById("processing");
+
+  const progress =
+    document.getElementById("progress");
+
+  const percent =
+    document.getElementById("percent");
+
+  const stages =
+    document.querySelectorAll(".stage-status");
+
+  const button =
+    document.querySelector(".start");
+
+  processing.style.display = "block";
+
+  processing.scrollIntoView({
+    behavior: "smooth"
+  });
+
+  button.disabled = true;
+  button.textContent =
+    "☁️ UPLOADING TO R2...";
+
+  progress.style.width = "10%";
+  percent.textContent = "10%";
+
+  stages.forEach(function (s) {
+    s.textContent = "Waiting";
+    s.className = "stage-status";
+  });
+
+  stages[0].textContent =
+    "Uploading...";
+  stages[0].className =
+    "stage-status active";
+
+  try {
+
+    const result =
+      await uploadVideoToR2(file);
+
+    progress.style.width = "100%";
+    percent.textContent = "100%";
+
+    stages[0].textContent =
+      "✓ Uploaded to R2";
+    stages[0].className =
+      "stage-status done";
+
+    alert(
+      "✅ Video Upload အောင်မြင်ပါပြီ!\n\n" +
+      "R2 Key:\n" +
+      result.key
+    );
+
+    button.disabled = false;
+    button.textContent =
+      "🚀 START AUTO RECAP";
+
+  } catch (error) {
+
+    console.error(error);
+
+    stages[0].textContent =
+      "❌ Upload Failed";
+    stages[0].className =
+      "stage-status active";
+
+    button.disabled = false;
+    button.textContent =
+      "🚀 START AUTO RECAP";
+
+    alert(
+      "❌ R2 Upload မအောင်မြင်ပါ\n\n" +
+      error.message
+    );
+  }
+};
 </script>
 
 </body>
