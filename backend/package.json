@@ -1,18 +1,19 @@
 {
-  "name": "hkun-ai-backend",
-  "version": "1.0.0",
-  "description": "HKUN AI Movie Recap Backend",
-  "main": "server.js",
-  "type": "commonjs",
-  "scripts": {
-    "start": "node server.js"
-  },
-  "dependencies": {
-    "@google/genai": "^2.28.0",
-    "@aws-sdk/client-s3": "^3.693.0",
-    "@aws-sdk/s3-request-presigner": "^3.693.0",
-    "cors": "^2.8.5",
-    "express": "^4.21.2",
-    "multer": "^2.1.1"
-  }
+"name": "hkun-ai-backend",
+"version": "1.0.0",
+"description": "HKUN AI Movie Recap Backend",
+"main": "server.js",
+"type": "commonjs",
+"scripts": {
+"start": "node server.js"
+},
+"dependencies": {
+"@google/genai": "^2.28.0",
+"@aws-sdk/client-s3": "^3.693.0",
+"@aws-sdk/s3-request-presigner": "^3.693.0",
+"cors": "^2.8.5",
+"express": "^4.21.2",
+"multer": "^2.1.1",
+"node-edge-tts": "^1.2.10"
+}
 }
