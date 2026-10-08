@@ -1,12 +1,19 @@
 <!DOCTYPE html>
 <html lang="my">
+
 <head>
+
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<meta
+  name="viewport"
+  content="width=device-width, initial-scale=1.0"
+>
 
 <title>HKUN AI — Movie Recap</title>
 
 <style>
+
 *{
   box-sizing:border-box;
   margin:0;
@@ -14,7 +21,11 @@
 }
 
 body{
-  font-family:Arial,"Noto Sans Myanmar",sans-serif;
+  font-family:
+    Arial,
+    "Noto Sans Myanmar",
+    sans-serif;
+
   background:#08090d;
   color:#fff;
   min-height:100vh;
@@ -28,13 +39,18 @@ body{
 
 .header{
   padding:20px 18px;
+
   display:flex;
   align-items:center;
   justify-content:space-between;
+
   border-bottom:1px solid #20232c;
+
   position:sticky;
   top:0;
+
   background:#08090d;
+
   z-index:10;
 }
 
@@ -98,10 +114,13 @@ input,
 select{
   width:100%;
   padding:13px;
+
   border-radius:10px;
   border:1px solid #303440;
+
   background:#191c24;
   color:#fff;
+
   outline:none;
   font-size:14px;
 }
@@ -118,10 +137,18 @@ select:focus{
 .upload{
   border:2px dashed #343844;
   border-radius:14px;
+
   padding:25px 15px;
+
   text-align:center;
+
   cursor:pointer;
+
   background:#0e1016;
+}
+
+.upload:active{
+  transform:scale(.99);
 }
 
 .upload-icon{
@@ -144,12 +171,20 @@ select:focus{
 
 .file-info{
   display:none;
+
   margin-top:12px;
+
   padding:12px;
+
   border-radius:10px;
+
   background:#191c24;
+
   font-size:13px;
+
   line-height:1.7;
+
+  word-break:break-word;
 }
 
 .grid{
@@ -170,9 +205,12 @@ input[type="range"]{
 
 .logo-preview{
   margin-top:10px;
+
   display:none;
+
   max-width:120px;
   max-height:70px;
+
   border-radius:8px;
 }
 
@@ -180,14 +218,19 @@ input[type="range"]{
   display:flex;
   align-items:center;
   justify-content:space-between;
+
   gap:15px;
+
   padding:8px 0;
 }
 
 .switch{
   position:relative;
+
   width:48px;
   height:27px;
+
+  flex-shrink:0;
 }
 
 .switch input{
@@ -197,20 +240,29 @@ input[type="range"]{
 .slider{
   position:absolute;
   inset:0;
+
   background:#343844;
+
   border-radius:30px;
+
   cursor:pointer;
 }
 
 .slider:before{
   content:"";
+
   position:absolute;
+
   width:21px;
   height:21px;
+
   left:3px;
   top:3px;
+
   background:white;
+
   border-radius:50%;
+
   transition:.2s;
 }
 
@@ -224,14 +276,20 @@ input[type="range"]{
 
 .start{
   width:100%;
+
   border:0;
   border-radius:14px;
+
   padding:16px;
+
   background:#ff3b30;
   color:white;
+
   font-size:17px;
   font-weight:800;
+
   cursor:pointer;
+
   margin-top:5px;
 }
 
@@ -246,9 +304,13 @@ input[type="range"]{
 
 .note{
   text-align:center;
+
   color:#777e8b;
+
   font-size:11px;
+
   margin-top:12px;
+
   line-height:1.6;
 }
 
@@ -258,24 +320,37 @@ input[type="range"]{
 
 .progress-box{
   background:#191c24;
+
   border-radius:10px;
+
   height:10px;
+
   overflow:hidden;
+
   margin:15px 0;
 }
 
 .progress{
   width:0%;
+
   height:100%;
+
   background:#ff3b30;
+
   transition:.4s;
 }
 
 .stage{
   display:flex;
+
   justify-content:space-between;
+
+  gap:15px;
+
   padding:10px 0;
+
   border-bottom:1px solid #242733;
+
   font-size:13px;
 }
 
@@ -285,6 +360,8 @@ input[type="range"]{
 
 .stage-status{
   color:#777e8b;
+
+  text-align:right;
 }
 
 .active{
@@ -297,9 +374,34 @@ input[type="range"]{
 
 .footer{
   text-align:center;
+
   color:#555b67;
+
   font-size:11px;
+
   padding:20px;
+}
+
+.error-box{
+  display:none;
+
+  margin-top:12px;
+
+  padding:12px;
+
+  border-radius:10px;
+
+  background:#2a1111;
+
+  border:1px solid #6d2525;
+
+  color:#ff8f8f;
+
+  font-size:12px;
+
+  line-height:1.6;
+
+  word-break:break-word;
 }
 
 @media(max-width:400px){
@@ -313,12 +415,17 @@ input[type="range"]{
   }
 
 }
+
 </style>
+
 </head>
+
 
 <body>
 
+
 <div class="app">
+
 
 <header class="header">
 
@@ -332,7 +439,9 @@ input[type="range"]{
 
 </header>
 
+
 <main class="main">
+
 
 <section class="hero">
 
@@ -348,13 +457,16 @@ input[type="range"]{
 </section>
 
 
-<!-- VIDEO UPLOAD -->
+<!-- =========================================
+     VIDEO UPLOAD
+     ========================================= -->
 
 <div class="card">
 
   <div class="card-title">
     🎬 Video Upload
   </div>
+
 
   <label
     for="videoInput"
@@ -375,27 +487,38 @@ input[type="range"]{
 
   </label>
 
+
   <input
     id="videoInput"
     type="file"
-    accept="video/*"
+    accept="video/*,.mp4,.mov,.mkv"
   >
+
 
   <div
     id="fileInfo"
     class="file-info"
   ></div>
 
+
+  <div
+    id="uploadError"
+    class="error-box"
+  ></div>
+
 </div>
 
 
-<!-- VOICE -->
+<!-- =========================================
+     VOICE
+     ========================================= -->
 
 <div class="card">
 
   <div class="card-title">
     🇲🇲 Myanmar Voice
   </div>
+
 
   <div class="field">
 
@@ -425,6 +548,7 @@ input[type="range"]{
 
   </div>
 
+
   <div class="field">
 
     <label>
@@ -440,6 +564,7 @@ input[type="range"]{
 
     </label>
 
+
     <input
       id="voiceSpeed"
       type="range"
@@ -454,13 +579,16 @@ input[type="range"]{
 </div>
 
 
-<!-- RECAP -->
+<!-- =========================================
+     RECAP STYLE
+     ========================================= -->
 
 <div class="card">
 
   <div class="card-title">
     🧠 Recap Style
   </div>
+
 
   <select id="style">
 
@@ -497,13 +625,16 @@ input[type="range"]{
 </div>
 
 
-<!-- VIDEO SETTINGS -->
+<!-- =========================================
+     VIDEO SETTINGS
+     ========================================= -->
 
 <div class="card">
 
   <div class="card-title">
     🎞️ Video Settings
   </div>
+
 
   <div class="field">
 
@@ -519,6 +650,7 @@ input[type="range"]{
       </span>
 
     </label>
+
 
     <select id="videoSpeed">
 
@@ -549,7 +681,9 @@ input[type="range"]{
 
   </div>
 
+
   <div class="grid">
+
 
     <div class="field">
 
@@ -583,6 +717,7 @@ input[type="range"]{
 
     </div>
 
+
     <div class="field">
 
       <label>
@@ -603,7 +738,9 @@ input[type="range"]{
 
     </div>
 
+
   </div>
+
 
   <div class="field">
 
@@ -648,7 +785,9 @@ input[type="range"]{
 </div>
 
 
-<!-- LOGO -->
+<!-- =========================================
+     LOGO
+     ========================================= -->
 
 <div class="card">
 
@@ -656,11 +795,13 @@ input[type="range"]{
     🔰 Logo
   </div>
 
+
   <div class="field">
 
     <label>
       Logo Upload
     </label>
+
 
     <input
       id="logoInput"
@@ -668,14 +809,18 @@ input[type="range"]{
       accept="image/*"
     >
 
+
     <img
       id="logoPreview"
       class="logo-preview"
+      alt="Logo Preview"
     >
 
   </div>
 
+
   <div class="grid">
+
 
     <div class="field">
 
@@ -705,6 +850,7 @@ input[type="range"]{
 
     </div>
 
+
     <div class="field">
 
       <label>
@@ -733,18 +879,22 @@ input[type="range"]{
 
     </div>
 
+
   </div>
 
 </div>
 
 
-<!-- BLUR -->
+<!-- =========================================
+     BLUR
+     ========================================= -->
 
 <div class="card">
 
   <div class="card-title">
     🪄 Original Text / Object Removal
   </div>
+
 
   <div class="row">
 
@@ -762,6 +912,7 @@ input[type="range"]{
 
     </div>
 
+
     <label class="switch">
 
       <input
@@ -775,6 +926,7 @@ input[type="range"]{
     </label>
 
   </div>
+
 
   <div class="row">
 
@@ -792,6 +944,7 @@ input[type="range"]{
 
     </div>
 
+
     <label class="switch">
 
       <input
@@ -805,6 +958,7 @@ input[type="range"]{
     </label>
 
   </div>
+
 
   <div class="field">
 
@@ -837,7 +991,9 @@ input[type="range"]{
 </div>
 
 
-<!-- SUBTITLE -->
+<!-- =========================================
+     SUBTITLE
+     ========================================= -->
 
 <div class="card">
 
@@ -845,7 +1001,9 @@ input[type="range"]{
     💬 Myanmar Subtitle
   </div>
 
+
   <div class="grid">
+
 
     <div class="field">
 
@@ -870,6 +1028,7 @@ input[type="range"]{
       </select>
 
     </div>
+
 
     <div class="field">
 
@@ -899,9 +1058,12 @@ input[type="range"]{
 
     </div>
 
+
   </div>
 
+
   <div class="grid">
+
 
     <div class="field">
 
@@ -927,6 +1089,7 @@ input[type="range"]{
 
     </div>
 
+
     <div class="field">
 
       <label>
@@ -951,20 +1114,26 @@ input[type="range"]{
 
     </div>
 
+
   </div>
 
 </div>
 
 
-<!-- START -->
+<!-- =========================================
+     START
+     ========================================= -->
 
 <button
   class="start"
   id="startButton"
-  onclick="startProduction()"
+  type="button"
 >
+
   🚀 START AUTO RECAP
+
 </button>
+
 
 <div class="note">
 
@@ -975,7 +1144,9 @@ input[type="range"]{
 </div>
 
 
-<!-- PROCESSING -->
+<!-- =========================================
+     PROCESSING
+     ========================================= -->
 
 <div
   class="card processing"
@@ -986,6 +1157,7 @@ input[type="range"]{
     ⚙️ Production Progress
   </div>
 
+
   <div class="progress-box">
 
     <div
@@ -995,14 +1167,21 @@ input[type="range"]{
 
   </div>
 
+
   <div
     id="percent"
-    style="text-align:center;font-size:13px;color:#aaa"
+    style="
+      text-align:center;
+      font-size:13px;
+      color:#aaa
+    "
   >
     0%
   </div>
 
+
   <div style="margin-top:15px">
+
 
     <div class="stage">
 
@@ -1016,6 +1195,7 @@ input[type="range"]{
 
     </div>
 
+
     <div class="stage">
 
       <span>
@@ -1027,6 +1207,7 @@ input[type="range"]{
       </span>
 
     </div>
+
 
     <div class="stage">
 
@@ -1040,6 +1221,7 @@ input[type="range"]{
 
     </div>
 
+
     <div class="stage">
 
       <span>
@@ -1051,6 +1233,7 @@ input[type="range"]{
       </span>
 
     </div>
+
 
     <div class="stage">
 
@@ -1064,6 +1247,7 @@ input[type="range"]{
 
     </div>
 
+
     <div class="stage">
 
       <span>
@@ -1075,6 +1259,7 @@ input[type="range"]{
       </span>
 
     </div>
+
 
     <div class="stage">
 
@@ -1088,6 +1273,7 @@ input[type="range"]{
 
     </div>
 
+
     <div class="stage">
 
       <span>
@@ -1100,48 +1286,86 @@ input[type="range"]{
 
     </div>
 
+
   </div>
 
 </div>
 
+
 </main>
 
+
 <footer class="footer">
+
   HKUN AI © 2026
+
 </footer>
+
 
 </div>
 
 
 <script>
 
+
 /* =========================================
-   HKUN AI — FRONTEND
+   HKUN AI FRONTEND
+   ========================================= */
+
+
+/* =========================================
+   ELEMENTS
    ========================================= */
 
 const videoInput =
-  document.getElementById("videoInput");
+  document.getElementById(
+    "videoInput"
+  );
 
 const fileInfo =
-  document.getElementById("fileInfo");
+  document.getElementById(
+    "fileInfo"
+  );
+
+const uploadError =
+  document.getElementById(
+    "uploadError"
+  );
 
 const voiceSpeed =
-  document.getElementById("voiceSpeed");
+  document.getElementById(
+    "voiceSpeed"
+  );
 
 const voiceSpeedText =
-  document.getElementById("voiceSpeedText");
+  document.getElementById(
+    "voiceSpeedText"
+  );
 
 const videoSpeed =
-  document.getElementById("videoSpeed");
+  document.getElementById(
+    "videoSpeed"
+  );
 
 const videoSpeedText =
-  document.getElementById("videoSpeedText");
+  document.getElementById(
+    "videoSpeedText"
+  );
 
 const logoInput =
-  document.getElementById("logoInput");
+  document.getElementById(
+    "logoInput"
+  );
 
 const logoPreview =
-  document.getElementById("logoPreview");
+  document.getElementById(
+    "logoPreview"
+  );
+
+const startButton =
+  document.getElementById(
+    "startButton"
+  );
 
 
 /* =========================================
@@ -1153,17 +1377,73 @@ const BACKEND_URL =
 
 
 /* =========================================
-   MULTIPART SETTINGS
+   MULTIPART
    ========================================= */
 
 const CHUNK_SIZE =
   16 * 1024 * 1024;
 
-const MAX_RETRY = 3;
+const MAX_RETRY =
+  3;
 
 
 /* =========================================
-   VIDEO INFORMATION
+   FILE SIZE
+   ========================================= */
+
+function formatBytes(
+  bytes
+){
+
+  if(
+    !Number.isFinite(bytes)
+  ){
+    return "Unknown";
+  }
+
+  if(
+    bytes < 1024
+  ){
+    return bytes + " B";
+  }
+
+  if(
+    bytes < 1024 * 1024
+  ){
+    return (
+      bytes /
+      1024
+    ).toFixed(1) +
+    " KB";
+  }
+
+  if(
+    bytes <
+    1024 *
+    1024 *
+    1024
+  ){
+    return (
+      bytes /
+      1024 /
+      1024
+    ).toFixed(1) +
+    " MB";
+  }
+
+  return (
+    bytes /
+    1024 /
+    1024 /
+    1024
+  ).toFixed(2) +
+  " GB";
+
+}
+
+
+/* =========================================
+   VIDEO SELECT
    ========================================= */
 
 videoInput.addEventListener(
@@ -1171,427 +1451,201 @@ videoInput.addEventListener(
   function(){
 
     const file =
+      this.files &&
       this.files[0];
 
-    if(!file){
-      return;
-    }
 
-    const sizeMB =
-      (
-        file.size /
-        1024 /
-        1024
-      ).toFixed(1);
+    uploadError.style.display =
+      "none";
 
-    const video =
-      document.createElement("video");
+    uploadError.textContent =
+      "";
 
-    video.preload =
-      "metadata";
-
-    video.onloadedmetadata =
-      function(){
-
-        const duration =
-          Math.round(
-            video.duration
-          );
-
-        const minutes =
-          Math.floor(
-            duration / 60
-          );
-
-        const seconds =
-          duration % 60;
-
-        fileInfo.style.display =
-          "block";
-
-        fileInfo.innerHTML =
-          "🎬 <b>" +
-          file.name +
-          "</b><br>" +
-
-          "⏱️ Duration: " +
-          minutes +
-          "m " +
-          seconds +
-          "s<br>" +
-
-          "💾 Size: " +
-          sizeMB +
-          " MB";
-
-        URL.revokeObjectURL(
-          video.src
-        );
-
-      };
-
-    video.src =
-      URL.createObjectURL(
-        file
-      );
-
-  }
-);
-
-
-/* =========================================
-   VOICE SPEED
-   ========================================= */
-
-voiceSpeed.addEventListener(
-  "input",
-  function(){
-
-    voiceSpeedText.textContent =
-      Number(
-        this.value
-      ).toFixed(2) +
-      "×";
-
-  }
-);
-
-
-/* =========================================
-   VIDEO SPEED
-   ========================================= */
-
-videoSpeed.addEventListener(
-  "change",
-  function(){
-
-    videoSpeedText.textContent =
-      this.value +
-      "×";
-
-  }
-);
-
-
-/* =========================================
-   LOGO PREVIEW
-   ========================================= */
-
-logoInput.addEventListener(
-  "change",
-  function(){
-
-    const file =
-      this.files[0];
 
     if(!file){
+
+      fileInfo.style.display =
+        "none";
+
       return;
+
     }
 
-    logoPreview.src =
-      URL.createObjectURL(
-        file
-      );
 
-    logoPreview.style.display =
+    /*
+     * IMPORTANT
+     *
+     * File information ကို
+     * metadata မစောင့်ဘဲ
+     * ချက်ချင်းပြမယ်။
+     */
+
+    fileInfo.style.display =
       "block";
 
-  }
-);
 
+    fileInfo.innerHTML =
 
-/* =========================================
-   PROGRESS
-   ========================================= */
-
-function setUploadProgress(
-  percent,
-  message
-){
-
-  const progress =
-    document.getElementById(
-      "progress"
-    );
-
-  const percentEl =
-    document.getElementById(
-      "percent"
-    );
-
-  const stage =
-    document.querySelector(
-      ".stage-status"
-    );
-
-
-  if(progress){
-
-    progress.style.width =
-      Math.min(
-        100,
-        Math.max(
-          0,
-          percent
-        )
+      "🎬 <b>" +
+      escapeHTML(
+        file.name
       ) +
-      "%";
+      "</b><br>" +
 
-  }
-
-
-  if(percentEl){
-
-    percentEl.textContent =
-      Math.round(
-        percent
+      "💾 Size: " +
+      formatBytes(
+        file.size
       ) +
-      "%";
+      "<br>" +
 
-  }
+      "📁 Type: " +
+      (
+        file.type ||
+        "video"
+      ) +
+      "<br>" +
 
-
-  if(stage){
-
-    stage.textContent =
-      message;
-
-    stage.className =
-      "stage-status active";
-
-  }
-
-}
+      "⏳ Duration စစ်နေသည်...";
 
 
-/* =========================================
-   READ SERVER JSON
-   ========================================= */
-
-async function readJSON(
-  response
-){
-
-  let data = {};
-
-  try{
-
-    data =
-      await response.json();
-
-  }catch(error){}
-
-
-  if(!response.ok){
-
-    throw new Error(
-
-      data.error ||
-
-      data.message ||
-
-      "Server Error: " +
-      response.status
-
-    );
-
-  }
-
-
-  return data;
-
-}
-
-
-/* =========================================
-   UPLOAD ONE PART
-   ========================================= */
-
-async function uploadPart(
-  file,
-  uploadId,
-  partNumber,
-  start,
-  end
-){
-
-  const blob =
-    file.slice(
-      start,
-      end
-    );
-
-
-  for(
-    let attempt = 1;
-    attempt <= MAX_RETRY;
-    attempt++
-  ){
+    /*
+     * Try metadata.
+     *
+     * Metadata မရလည်း
+     * Upload ကို မတားပါ။
+     */
 
     try{
 
-      const formData =
-        new FormData();
+      const video =
+        document.createElement(
+          "video"
+        );
+
+      video.preload =
+        "metadata";
 
 
-      formData.append(
-        "uploadId",
-        uploadId
-      );
-
-
-      formData.append(
-        "partNumber",
-        String(
-          partNumber
-        )
-      );
-
-
-      formData.append(
-        "part",
-        blob,
-        file.name
-      );
-
-
-      const response =
-        await fetch(
-
-          BACKEND_URL +
-          "/api/upload-part",
-
-          {
-            method:
-              "POST",
-
-            body:
-              formData
-
-          }
-
+      const objectURL =
+        URL.createObjectURL(
+          file
         );
 
 
-      return await readJSON(
-        response
-      );
+      video.onloadedmetadata =
+        function(){
+
+          let durationText =
+            "Unknown";
 
 
-    }catch(error){
+          if(
+            Number.isFinite(
+              video.duration
+            )
+          ){
 
-      console.warn(
-
-        "Part " +
-        partNumber +
-        " attempt " +
-        attempt +
-        " failed:",
-
-        error
-
-      );
+            const totalSeconds =
+              Math.round(
+                video.duration
+              );
 
 
-      if(
-        attempt ===
-        MAX_RETRY
-      ){
-
-        throw error;
-
-      }
+            const minutes =
+              Math.floor(
+                totalSeconds /
+                60
+              );
 
 
-      await new Promise(
-        function(resolve){
+            const seconds =
+              totalSeconds %
+              60;
 
-          setTimeout(
 
-            resolve,
+            durationText =
+              minutes +
+              "m " +
+              String(
+                seconds
+              ).padStart(
+                2,
+                "0"
+              ) +
+              "s";
 
-            1500 *
-            attempt
+          }
 
+
+          fileInfo.innerHTML =
+
+            "🎬 <b>" +
+            escapeHTML(
+              file.name
+            ) +
+            "</b><br>" +
+
+            "⏱️ Duration: " +
+            durationText +
+            "<br>" +
+
+            "💾 Size: " +
+            formatBytes(
+              file.size
+            ) +
+            "<br>" +
+
+            "📁 Type: " +
+            (
+              file.type ||
+              "video"
+            ) +
+            "<br>" +
+
+            "✅ Video ရွေးပြီးပါပြီ";
+
+
+          URL.revokeObjectURL(
+            objectURL
           );
 
-        }
-      );
-
-    }
-
-  }
-
-}
+        };
 
 
-/* =========================================
-   R2 MULTIPART UPLOAD
-   ========================================= */
+      video.onerror =
+        function(){
 
-async function uploadVideoToR2(
-  file
-){
+          fileInfo.innerHTML =
 
-  setUploadProgress(
-    1,
-    "Preparing upload..."
-  );
+            "🎬 <b>" +
+            escapeHTML(
+              file.name
+            ) +
+            "</b><br>" +
 
-
-  /* INIT */
-
-  const initResponse =
-    await fetch(
-
-      BACKEND_URL +
-      "/api/upload-init",
-
-      {
-
-        method:
-          "POST",
-
-        headers:{
-          "Content-Type":
-            "application/json"
-        },
-
-        body:
-          JSON.stringify({
-
-            filename:
-              file.name,
-
-            contentType:
-              file.type ||
-              "video/mp4",
-
-            fileSize:
+            "💾 Size: " +
+            formatBytes(
               file.size
+            ) +
+            "<br>" +
 
-          })
+            "📁 Type: " +
+            (
+              file.type ||
+              "video"
+            ) +
+            "<br>" +
 
-      }
-
-    );
-
-
-  const init =
-    await readJSON(
-      initResponse
-    );
-
-
-  if(
-    !init.uploadId
-  ){
-
-    throw new Error(
-      "Upload session မရပါ"
-    );
-
-  }
+            "✅ Video ရွေးပြီးပါပြီ";
 
 
-  const uploa
+          URL.revokeObjectURL(
+            objectURL
+          );
+
+        };
+
+
+      video.src =
+        objectURL;
+  
