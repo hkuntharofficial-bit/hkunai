@@ -67,6 +67,51 @@ app.get("/api/health", (req, res) => {
   });
 });
 
+app.get("/api/upload-url-get", async (req, res) => {
+  try {
+    const { filename, contentType } = req.query;
+
+    if (!filename) {
+      return res.status(400).json({
+        error: "filename is required"
+      });
+    }
+
+    const safeName = String(filename)
+      .replace(/[^a-zA-Z0-9._-]/g, "_");
+
+    const key =
+      `uploads/${Date.now()}-${safeName}`;
+
+    const command = new PutObjectCommand({
+      Bucket: BUCKET,
+      Key: key,
+      ContentType: contentType || "video/mp4"
+    });
+
+    const uploadUrl = await getSignedUrl(
+      R2,
+      command,
+      { expiresIn: 3600 }
+    );
+
+    res.json({
+      ok: true,
+      uploadUrl,
+      key,
+      bucket: BUCKET
+    });
+
+  } catch (error) {
+    console.error(error);
+
+    res.status(500).json({
+      ok: false,
+      error: "Failed to create upload URL"
+    });
+  }
+});
+
 app.post("/api/upload-url", async (req, res) => {
   try {
     const { filename, contentType } = req.body;
