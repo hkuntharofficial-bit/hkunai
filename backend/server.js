@@ -1833,6 +1833,186 @@ app.get(
   }
 );
 
+/* =========================================================
+   GEMINI RECAP SCRIPT GENERATION
+========================================================= */
+
+app.post(
+  "/api/generate-script",
+  async (req, res) => {
+
+    try {
+
+      if (!GEMINI) {
+
+        return res.status(500).json({
+
+          ok: false,
+
+          error:
+            "GEMINI_API_KEY is not configured"
+
+        });
+
+      }
+
+
+      const {
+        analysis,
+        recapStyle,
+        voice
+      } = req.body || {};
+
+
+      if (!analysis) {
+
+        return res.status(400).json({
+
+          ok: false,
+
+          error:
+            "Gemini analysis is required"
+
+        });
+
+      }
+
+
+      const style =
+        recapStyle ||
+        "Movie Recap";
+
+
+      const selectedVoice =
+        voice ||
+        "Myanmar Male 01";
+
+
+      const scriptPrompt = `
+
+You are HKUN AI, a professional
+Myanmar Original Movie Recap Script Writer.
+
+Write a natural Myanmar-language
+movie recap narration script based
+ONLY on the confirmed video analysis
+below.
+
+IMPORTANT RULES:
+
+1. Do NOT invent events.
+2. Do NOT invent characters.
+3. Do NOT invent locations.
+4. Do NOT invent relationships.
+5. Do NOT add information that is
+   not supported by the video analysis.
+6. Keep the original chronology.
+7. Maintain story continuity.
+8. Do NOT write editing instructions.
+9. Do NOT write camera instructions.
+10. Do NOT write subtitle instructions.
+11. Do NOT write timestamps in the
+    narration unless they are necessary.
+12. The result must sound like a
+    professional Myanmar Movie Recap
+    narrator speaking naturally.
+13. Do not simply translate dialogue.
+14. Summarize and explain the story
+    in original Myanmar narration.
+15. Keep important story information.
+16. Do not skip important events.
+
+RECAP STYLE:
+${style}
+
+VOICE:
+${selectedVoice}
+
+VIDEO ANALYSIS:
+${analysis}
+
+OUTPUT:
+
+Return ONLY the Myanmar narration
+script.
+
+The script must be continuous,
+natural and easy for Myanmar TTS
+to pronounce.
+
+`;
+
+      const result =
+        await GEMINI.models.generateContent({
+
+          model:
+            GEMINI_MODEL,
+
+          contents:
+            scriptPrompt
+
+        });
+
+
+      const scriptText =
+        result.text || "";
+
+
+      if (!scriptText.trim()) {
+
+        throw new Error(
+          "Gemini returned an empty recap script"
+        );
+
+      }
+
+
+      res.json({
+
+        ok: true,
+
+        model:
+          GEMINI_MODEL,
+
+        recapStyle:
+          style,
+
+        voice:
+          selectedVoice,
+
+        script:
+          scriptText,
+
+        message:
+          "Myanmar recap script generated"
+
+      });
+
+
+    } catch (error) {
+
+      console.error(
+        "GEMINI SCRIPT ERROR:",
+        error
+      );
+
+
+      res.status(500).json({
+
+        ok: false,
+
+        error:
+          "Failed to generate Myanmar recap script",
+
+        message:
+          error.message
+
+      });
+
+    }
+
+  }
+);
 
 /* =========================================================
    ERROR HANDLER
