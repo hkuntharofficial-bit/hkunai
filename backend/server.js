@@ -2139,6 +2139,90 @@ setInterval(
   1000
 );
 
+/* =========================================================
+MYANMAR TEXT TO SPEECH
+========================================================= */
+
+const { EdgeTTS } = require("node-edge-tts");
+
+app.post("/api/tts", async (req, res) => {
+let tempDir;
+
+try {
+const { text, voice, speed } = req.body || {};
+
+if (typeof text !== "string" || !text.trim()) {
+  return res.status(400).json({
+    ok: false,
+    error: "Myanmar text is required"
+  });
+}
+
+if (text.length > 2500) {
+  return res.status(400).json({
+    ok: false,
+    error: "စာလုံး ၂၅၀၀ ထက်ကျော်နေပါတယ်။ အပိုင်းခွဲပါ။"
+  });
+}
+
+const selectedVoice =
+  voice === "Myanmar Female 01" ||
+  voice === "Myanmar Female 02"
+    ? "my-MM-NilarNeural"
+    : "my-MM-ThihaNeural";
+
+const rateValue = Number(speed || 1);
+const safeRate = Math.max(0.8, Math.min(1.2, rateValue));
+const rate = `${Math.round((safeRate - 1) * 100)}%`;
+
+tempDir = fs.mkdtempSync(
+  path.join(os.tmpdir(), "hkun-tts-")
+);
+
+const audioPath = path.join(tempDir, "speech.mp3");
+
+const tts = new EdgeTTS({
+  voice: selectedVoice,
+  lang: "my-MM",
+  outputFormat: "audio-24khz-48kbitrate-mono-mp3",
+  rate,
+  timeout: 60000
+});
+
+await tts.ttsPromise(text.trim(), audioPath);
+
+res.setHeader("Content-Type", "audio/mpeg");
+res.setHeader(
+  "Content-Disposition",
+  'attachment; filename="hkun-myanmar-voice.mp3"'
+);
+
+res.sendFile(audioPath, (err) => {
+  if (tempDir) {
+    fs.rmSync(tempDir, { recursive: true, force: true });
+  }
+
+  if (err && !res.headersSent) {
+    res.status(500).end("Audio delivery failed");
+  }
+});
+
+} catch (error) {
+if (tempDir) {
+fs.rmSync(tempDir, { recursive: true, force: true });
+}
+
+console.error("Myanmar TTS error:", error);
+
+if (!res.headersSent) {
+  res.status(500).json({
+    ok: false,
+    error: "အသံထုတ်မရပါ။ နောက်တစ်ကြိမ် ပြန်ကြိုးစားပါ။"
+  });
+}
+
+}
+});
 
 /* =========================================================
    START SERVER
