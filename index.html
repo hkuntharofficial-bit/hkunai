@@ -1415,13 +1415,15 @@ async function generateMyanmarVoice(scriptText) {
     `စာသား ${String(scriptText).length.toLocaleString()} လုံး၊ ` +
     `အသံအပိုင်း ${chunks.length} ပိုင်း ထုတ်ပြီးပါပြီ။`;
 
-  stages[3].textContent = "✓ Myanmar Voice completed";
-  stages[3].className = "stage-status done";
+stages[3].textContent = "✓ Myanmar Voice completed";
+stages[3].className = "stage-status done";
 }
-   
-  return await readJSON(
-    response
-  );
+
+window.generateMyanmarVoice = generateMyanmarVoice;
+
+return await readJSON(
+  response
+);
 }
 
 
