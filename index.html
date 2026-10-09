@@ -614,7 +614,18 @@ style="text-align:center;color:#aaa;font-size:13px"
 
 </div>
 </div>
-
+   
+<div id="voiceOutput" class="card" style="display:none">
+  <div class="title">🇲🇲 Myanmar Voice MP3</div>
+  <audio id="voiceAudio" controls style="width:100%"></audio>
+  <a id="voiceDownload"
+     download="hkun-myanmar-voice.mp3"
+     style="display:block;margin-top:12px;padding:14px;background:#ff3b30;color:white;text-align:center;border-radius:10px;text-decoration:none;font-weight:bold">
+    ⬇️ MP3 ဒေါင်းလုဒ်လုပ်ရန်
+  </a>
+  <p id="voiceMessage" style="margin-top:10px;color:#aaa;font-size:12px"></p>
+</div>
+   
 </main>
 
 <footer class="footer">
@@ -1320,6 +1331,94 @@ by the actual video.
       }
     );
 
+let hkunVoiceObjectUrl = null;
+
+function splitTextForTTS(text, maxLength = 1600) {
+  const chunks = [];
+  let remaining = String(text || "").trim();
+
+  while (remaining.length > maxLength) {
+    let cut = -1;
+
+    for (const mark of ["။", "!", "?", "\n", " "]) {
+      const index = remaining.lastIndexOf(mark, maxLength);
+      if (index > maxLength * 0.55 && index > cut) {
+        cut = index + (mark === " " || mark === "\n" ? 0 : 1);
+      }
+    }
+
+    if (cut < 1) cut = maxLength;
+
+    chunks.push(remaining.slice(0, cut).trim());
+    remaining = remaining.slice(cut).trim();
+  }
+
+  if (remaining) chunks.push(remaining);
+  return chunks;
+}
+
+async function generateMyanmarVoice(scriptText) {
+  if (!scriptText || !String(scriptText).trim()) {
+    throw new Error("အသံထုတ်ရန် Recap စာသား မရှိပါ။");
+  }
+
+  const chunks = splitTextForTTS(scriptText);
+  const audioParts = [];
+
+  stages[3].textContent = "မြန်မာအသံ ထုတ်နေသည်...";
+  stages[3].className = "stage-status active";
+
+  for (let i = 0; i < chunks.length; i++) {
+    stages[3].textContent =
+      `အသံထုတ်နေသည် ${i + 1}/${chunks.length}`;
+
+    const response = await fetch(BACKEND + "/api/tts", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        text: chunks[i],
+        voice: document.getElementById("voice").value,
+        speed: Number(voiceSpeed.value || 1)
+      })
+    });
+
+    if (!response.ok) {
+      const message = await response.text();
+      throw new Error(
+        `အသံအပိုင်း ${i + 1} မအောင်မြင်ပါ: ${message.slice(0, 200)}`
+      );
+    }
+
+    audioParts.push(await response.arrayBuffer());
+  }
+
+  const audioBlob = new Blob(audioParts, {
+    type: "audio/mpeg"
+  });
+
+  if (hkunVoiceObjectUrl) {
+    URL.revokeObjectURL(hkunVoiceObjectUrl);
+  }
+
+  hkunVoiceObjectUrl = URL.createObjectURL(audioBlob);
+
+  document.getElementById("voiceAudio").src =
+    hkunVoiceObjectUrl;
+
+  document.getElementById("voiceDownload").href =
+    hkunVoiceObjectUrl;
+
+  document.getElementById("voiceOutput").style.display =
+    "block";
+
+  document.getElementById("voiceMessage").textContent =
+    `စာသား ${String(scriptText).length.toLocaleString()} လုံး၊ ` +
+    `အသံအပိုင်း ${chunks.length} ပိုင်း ထုတ်ပြီးပါပြီ။`;
+
+  stages[3].textContent = "✓ Myanmar Voice completed";
+  stages[3].className = "stage-status done";
+}
+   
   return await readJSON(
     response
   );
@@ -1497,7 +1596,9 @@ const scriptResult =
 
 window.hkunRecapScript =
   scriptResult.script;
-
+       
+await generateMyanmarVoice(scriptResult.script);
+       
 stages[2].textContent =
   "✓ Myanmar recap script completed";
 
