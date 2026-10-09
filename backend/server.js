@@ -2158,10 +2158,10 @@ if (typeof text !== "string" || !text.trim()) {
   });
 }
 
-if (text.length > 2500) {
+if (text.length > 20000) {
   return res.status(400).json({
     ok: false,
-    error: "စာလုံး ၂၅၀၀ ထက်ကျော်နေပါတယ်။ အပိုင်းခွဲပါ။"
+    error: "စာလုံး ၂၀,၀၀၀ ထက်ကျော်နေပါတယ်။ အပိုင်းခွဲပါ။"
   });
 }
 
