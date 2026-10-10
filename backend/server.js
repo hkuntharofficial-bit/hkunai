@@ -2196,7 +2196,7 @@ app.post("/api/render-video", renderUpload.single("audio"), async (req, res) => 
       if (!Number.isFinite(sourceDuration) || sourceDuration <= 0) {
         console.warn("SOURCE DURATION PROBE UNAVAILABLE; validating scene plan against its latest timestamp");
       }
-      scenePlan = scenePlan.slice(0, 12).filter(s => s.start < safeSourceDuration && s.end <= safeSourceDuration + 0.05);
+      scenePlan = scenePlan.slice(0, 4).filter(s => s.start < safeSourceDuration && s.end <= safeSourceDuration + 0.05);
       if (!scenePlan.length) {
         console.warn("AI scene timestamps could not be validated; using a single opening segment and guarded render fallback");
         scenePlan = [{ start: 0, end: Math.max(0.5, safeSourceDuration) }];
@@ -2220,7 +2220,7 @@ app.post("/api/render-video", renderUpload.single("audio"), async (req, res) => 
       });
       filters.push(labels.join("") + "concat=n=" + scenePlan.length + ":v=1:a=0,tpad=stop_mode=clone:stop_duration=1,trim=duration=" + audioDuration.toFixed(3) + ",setpts=PTS-STARTPTS[vout]");
       args.push("-filter_complex", filters.join(";"), "-map", "[vout]", "-map", audioIndex + ":a:0", "-map", subtitleIndex + ":0", "-t", audioDuration.toFixed(3), "-c:v", "libx264", "-preset", "ultrafast", "-crf", "23", "-threads", "1", "-pix_fmt", "yuv420p", "-c:a", "aac", "-b:a", "128k", "-c:s", "mov_text", "-max_muxing_queue_size", "2048", "-map_metadata", "0", "-shortest", "-movflags", "+faststart", outputPath);
-      console.log("FINAL RENDER MODE: memory-bounded scene montage with video-only speed adjustment", scenePlan.length, "scenes", "sourceDuration:", sourceDuration, "selectedVideoSeconds:", selectedVideoSeconds, "videoTimeScale:", videoTimeScale, "audioDuration:", audioDuration);
+      console.log("FINAL RENDER MODE: low-memory scene montage with video-only speed adjustment", scenePlan.length, "scenes", "sourceDuration:", sourceDuration, "selectedVideoSeconds:", selectedVideoSeconds, "videoTimeScale:", videoTimeScale, "audioDuration:", audioDuration);
       try {
         await runFFmpeg(args);
       } catch (sceneRenderError) {
