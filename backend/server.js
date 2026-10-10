@@ -1967,7 +1967,12 @@ app.post(
       const {
         analysis,
         recapStyle,
-        voice
+        voice,
+        segmentTitle,
+        segmentIndex,
+        segmentCount,
+        segmentStart,
+        segmentEnd
       } = req.body || {};
 
 
@@ -2000,10 +2005,11 @@ app.post(
 You are HKUN AI, a professional
 Myanmar Original Movie Recap Script Writer.
 
-Write a natural Myanmar-language
-movie recap narration script based
-ONLY on the confirmed video analysis
-below.
+Write ONLY ONE PART of a larger Myanmar-language movie recap narration.
+The request may contain whole-video context plus a specific segment's evidence.
+The whole-video context is for continuity ONLY; do NOT retell the whole story from it.
+Write narration ONLY for the requested segment and its local evidence.
+Never repeat events that belong to earlier or later segments.
 
 IMPORTANT RULES:
 
@@ -2027,7 +2033,13 @@ IMPORTANT RULES:
 14. Summarize and explain the story
     in original Myanmar narration.
 15. Keep important story information.
-16. Do not skip important events.
+16. Do not skip important events within the requested segment.
+17. Treat WHOLE-VIDEO STORY UNDERSTANDING as background context only, not as narration content.
+18. Treat THIS SEGMENT'S LOCAL EVIDENCE as the scope of the output. Mention only events belonging to this segment.
+19. Do not introduce the story from the beginning unless this is segment 1.
+20. Do not provide a conclusion or ending unless this is the final segment and the evidence shows the ending.
+21. Start with a natural continuation when segment index is greater than 1; avoid repeating character introductions and plot setup.
+22. Keep the narration length proportional to the requested segment's duration and evidence.
 
 RECAP STYLE:
 ${style}
@@ -2038,10 +2050,13 @@ ${selectedVoice}
 VIDEO ANALYSIS:
 ${analysis}
 
-OUTPUT:
+SEGMENT REQUEST:
+${segmentTitle || 'Story segment'}
+Segment index: ${segmentIndex || 1} of ${segmentCount || 1}.
+Original video time range: ${segmentStart ?? 0} to ${segmentEnd ?? 'unknown'} seconds.
 
-Return ONLY the Myanmar narration
-script.
+OUTPUT:
+Return ONLY Myanmar narration for this requested segment. Do not repeat the full-video synopsis.
 
 The script must be continuous,
 natural and easy for Myanmar TTS
