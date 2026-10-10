@@ -362,53 +362,19 @@ async function downloadR2Object(
   the uploaded video.
 */
 
-async function waitForGeminiFile(
-  file
-) {
-
-  let current =
-    file;
-
-
-  while (
-    current &&
-    current.state === "PROCESSING"
-  ) {
-
-    await new Promise(
-      resolve =>
-        setTimeout(
-          resolve,
-          5000
-        )
-    );
-
-
-    current =
-      await GEMINI.files.get({
-        name:
-          current.name
-      });
-
+async function waitForGeminiFile(file) {
+  let current = file;
+  const startedAt = Date.now();
+  const maxWaitMs = 15 * 60 * 1000;
+  while (current && current.state === "PROCESSING") {
+    if (Date.now() - startedAt > maxWaitMs) throw new Error("Gemini is still processing this video after 15 minutes. Please retry; longer videos can take more time.");
+    await new Promise(resolve => setTimeout(resolve, 5000));
+    current = await GEMINI.files.get({ name: current.name });
   }
-
-
-  if (
-    current &&
-    current.state === "FAILED"
-  ) {
-
-    throw new Error(
-      "Gemini video processing failed"
-    );
-
-  }
-
-
+  if (current && current.state === "FAILED") throw new Error("Gemini video processing failed. Try an MP4 H.264 video.");
+  if (!current || !current.uri || current.state !== "ACTIVE") throw new Error("Gemini did not finish processing the video. Current state: " + (current?.state || "unknown"));
   return current;
-
 }
-
 
 /* =========================================================
    HOME
@@ -1491,51 +1457,16 @@ Do not assume information that is not visible or supported by the video.
         uploaded video.
       */
 
-      const response =
-        await GEMINI.models.generateContent({
-
-          model:
-            GEMINI_MODEL,
-
-          contents: [
-
-            {
-
-              role:
-                "user",
-
-              parts: [
-
-                {
-
-                  fileData: {
-
-                    fileUri:
-                      videoFile.uri,
-
-                    mimeType:
-                      videoFile.mimeType ||
-                      mimeType ||
-                      "video/mp4"
-
-                  }
-
-                },
-
-                {
-
-                  text:
-                    analysisPrompt
-
-                }
-
-              ]
-
-            }
-
-          ]
-
-        });
+      const analysisContents = [{ role: "user", parts: [{ fileData: { fileUri: videoFile.uri, mimeType: videoFile.mimeType || mimeType || "video/mp4" } }, { text: analysisPrompt }] }];
+      let response;
+      try {
+        response = await GEMINI.models.generateContent({ model: GEMINI_MODEL, contents: analysisContents });
+      } catch (primaryError) {
+        const fallbackModel = "gemini-2.5-flash";
+        if (GEMINI_MODEL === fallbackModel) throw primaryError;
+        console.error("Primary Gemini video model failed; retrying with", fallbackModel, primaryError?.message);
+        response = await GEMINI.models.generateContent({ model: fallbackModel, contents: analysisContents });
+      }
 
 
       const analysisText =
