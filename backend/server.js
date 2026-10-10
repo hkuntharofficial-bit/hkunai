@@ -1698,7 +1698,38 @@ app.post("/api/analyze-video-chunks", async (req, res) => {
       }
     }
     await Promise.all(Array.from({ length: Math.min(2, chunkFiles.length) }, () => analyzeChunkWorker()));
-    setAnalysisProgress({ phase: "completed", completed: chunkCount, total: chunkCount, percent: 100, message: "Story Understanding ပြီးပါပြီ" });
+
+    // Step 1: finish understanding every segment, then synthesize one coherent
+    // whole-video story before allowing recap-script generation to begin.
+    setAnalysisProgress({ phase: "synthesizing", completed: chunkCount, total: chunkCount, percent: 97, message: "အပိုင်းအားလုံးပြီးပါပြီ။ ဇာတ်လမ်းတစ်ပုဒ်လုံးကို စုစည်းနားလည်နေပါသည်..." });
+    const segmentEvidence = segments.map(item =>
+      "[SEGMENT " + item.index + " | " + item.start + "–" + item.end + " seconds]\n" + item.analysis
+    ).join("\n\n");
+    const wholeStoryPrompt = [
+      "You are HKUN AI. Build the definitive whole-video story understanding for a Myanmar movie recap.",
+      "All chronological source-video segments have already been analyzed. Synthesize them into ONE coherent, complete understanding of the entire video before any recap script is written.",
+      "Preserve chronological order and distinguish confirmed events from uncertainty. Track characters, relationships, motivations, cause-and-effect, turning points, setup/payoff, and ending if present.",
+      "Resolve continuity across segment boundaries using the evidence below. Do not invent scenes, dialogue, identities, motives, or an ending not supported by the evidence.",
+      "Use source timestamps where helpful. If evidence conflicts or a detail is unclear, say so.",
+      "Recap style: " + recapStyle,
+      "Return a detailed whole-video story analysis, not the narration script. It will be used as shared context for writing each segment's recap."
+    ].join("\n\n");
+    let wholeStoryResponse;
+    try {
+      wholeStoryResponse = await GEMINI.models.generateContent({
+        model: GEMINI_MODEL,
+        contents: [{ role: "user", parts: [{ text: wholeStoryPrompt + "\n\nCHRONOLOGICAL SEGMENT ANALYSES:\n" + segmentEvidence }] }]
+      });
+    } catch (primaryError) {
+      if (GEMINI_MODEL === "gemini-2.5-flash") throw primaryError;
+      wholeStoryResponse = await GEMINI.models.generateContent({
+        model: "gemini-2.5-flash",
+        contents: [{ role: "user", parts: [{ text: wholeStoryPrompt + "\n\nCHRONOLOGICAL SEGMENT ANALYSES:\n" + segmentEvidence }] }]
+      });
+    }
+    const wholeStoryAnalysis = String(wholeStoryResponse.text || "").trim();
+    if (!wholeStoryAnalysis) throw new Error("ဗီဒီယိုတစ်ပုဒ်လုံးအတွက် Story Understanding အဖြေမရရှိပါ။");
+    setAnalysisProgress({ phase: "completed", completed: chunkCount, total: chunkCount, percent: 100, message: "ဗီဒီယိုတစ်ပုဒ်လုံး Story Understanding ပြီးပါပြီ" });
 
     return res.json({
       ok: true,
@@ -1706,7 +1737,8 @@ app.post("/api/analyze-video-chunks", async (req, res) => {
       sourceDuration: Number(duration.toFixed(3)),
       chunkDuration: Number(chunkDuration.toFixed(3)),
       segments,
-      analysis: segments.map(s => "[SEGMENT " + s.index + " | " + s.start + "–" + s.end + " sec]\n" + s.analysis).join("\n\n")
+      analysis: wholeStoryAnalysis,
+      wholeStoryAnalysis
     });
   } catch (error) {
     if (key.startsWith("uploads/")) {
