@@ -2187,9 +2187,20 @@ app.post("/api/render-video", renderUpload.single("audio"), async (req, res) => 
       const probeText = String(probe.stderr || "") + "\n" + String(probe.stdout || "");
       const durationMatch = probeText.match(/Duration:\s*(\d+):(\d+):(\d+(?:\.\d+)?)/i);
       const sourceDuration = durationMatch ? Number(durationMatch[1]) * 3600 + Number(durationMatch[2]) * 60 + Number(durationMatch[3]) : NaN;
-      if (!Number.isFinite(sourceDuration) || sourceDuration <= 0) throw new Error("Could not read source video duration from FFmpeg probe");
-      scenePlan = scenePlan.slice(0, 12).filter(s => s.start < sourceDuration && s.end <= sourceDuration + 0.05);
-      if (!scenePlan.length) throw new Error("AI scene timestamps do not match the source video duration");
+      // FFmpeg may omit Duration for some MP4/container variants. Do not abort
+      // the entire recap just because the probe text cannot be parsed: attempt
+      // the scene edit, and let the guarded montage fallback handle bad timestamps.
+      const safeSourceDuration = Number.isFinite(sourceDuration) && sourceDuration > 0
+        ? sourceDuration
+        : Math.max(0, ...scenePlan.map(s => s.end));
+      if (!Number.isFinite(sourceDuration) || sourceDuration <= 0) {
+        console.warn("SOURCE DURATION PROBE UNAVAILABLE; validating scene plan against its latest timestamp");
+      }
+      scenePlan = scenePlan.slice(0, 12).filter(s => s.start < safeSourceDuration && s.end <= safeSourceDuration + 0.05);
+      if (!scenePlan.length) {
+        console.warn("AI scene timestamps could not be validated; using original-video sync render");
+        scenePlan = [];
+      }
       // Use independent seeked inputs rather than split=N; split branches can buffer large videos and exhaust Render memory.
       const args = ["-hide_banner","-y","-loglevel","warning"];
       scenePlan.forEach(s => { args.push("-ss", s.start.toFixed(3), "-t", (s.end-s.start).toFixed(3), "-i", sourcePath); });
