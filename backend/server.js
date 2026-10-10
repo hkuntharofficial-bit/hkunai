@@ -2209,10 +2209,18 @@ app.post("/api/render-video", renderUpload.single("audio"), async (req, res) => 
       args.push("-i", audioPath, "-f", "srt", "-i", subtitlePath);
       const filters = [];
       const labels = [];
-      scenePlan.forEach((s, i) => { const label = "v" + i; filters.push("[" + i + ":v:0]setpts=PTS-STARTPTS[" + label + "]"); labels.push("[" + label + "]"); });
-      filters.push(labels.join("") + "concat=n=" + scenePlan.length + ":v=1:a=0,tpad=stop_mode=clone:stop_duration=" + audioDuration.toFixed(3) + ",trim=duration=" + audioDuration.toFixed(3) + ",setpts=PTS-STARTPTS[vout]");
+      // Keep the narration untouched. Uniformly retime only the selected video
+      // clips so their combined duration matches the actual narration duration.
+      const selectedVideoSeconds = scenePlan.reduce((sum, s) => sum + (s.end - s.start), 0);
+      const videoTimeScale = selectedVideoSeconds > 0 ? audioDuration / selectedVideoSeconds : 1;
+      scenePlan.forEach((s, i) => {
+        const label = "v" + i;
+        filters.push("[" + i + ":v:0]setpts=(PTS-STARTPTS)*" + videoTimeScale.toFixed(8) + "[" + label + "]");
+        labels.push("[" + label + "]");
+      });
+      filters.push(labels.join("") + "concat=n=" + scenePlan.length + ":v=1:a=0,tpad=stop_mode=clone:stop_duration=1,trim=duration=" + audioDuration.toFixed(3) + ",setpts=PTS-STARTPTS[vout]");
       args.push("-filter_complex", filters.join(";"), "-map", "[vout]", "-map", audioIndex + ":a:0", "-map", subtitleIndex + ":0", "-t", audioDuration.toFixed(3), "-c:v", "libx264", "-preset", "ultrafast", "-crf", "23", "-threads", "1", "-pix_fmt", "yuv420p", "-c:a", "aac", "-b:a", "128k", "-c:s", "mov_text", "-max_muxing_queue_size", "2048", "-map_metadata", "0", "-shortest", "-movflags", "+faststart", outputPath);
-      console.log("FINAL RENDER MODE: memory-bounded scene montage", scenePlan.length, "scenes", "sourceDuration:", sourceDuration, "audioDuration:", audioDuration);
+      console.log("FINAL RENDER MODE: memory-bounded scene montage with video-only speed adjustment", scenePlan.length, "scenes", "sourceDuration:", sourceDuration, "selectedVideoSeconds:", selectedVideoSeconds, "videoTimeScale:", videoTimeScale, "audioDuration:", audioDuration);
       try {
         await runFFmpeg(args);
       } catch (sceneRenderError) {
@@ -2220,17 +2228,26 @@ app.post("/api/render-video", renderUpload.single("audio"), async (req, res) => 
         // Produce a valid narration MP4 from the original source as a safe fallback.
         console.error("SCENE MONTAGE FAILED; FALLING BACK TO ORIGINAL VIDEO:", String(sceneRenderError?.message || sceneRenderError).slice(0, 1200));
         try { fs.rmSync(outputPath, { force: true }); } catch {}
+        // Fallback also retimes video to narration length. Audio is never
+        // sped up, slowed down, trimmed, or regenerated here.
+        const fallbackScale = Number.isFinite(sourceDuration) && sourceDuration > 0
+          ? audioDuration / sourceDuration
+          : 1;
         const fallbackArgs = [
           "-hide_banner", "-y", "-loglevel", "warning",
           "-i", sourcePath, "-i", audioPath,
           "-f", "srt", "-i", subtitlePath,
-          "-map", "0:v:0", "-map", "1:a:0", "-map", "2:0",
-          "-c:v", "copy", "-c:a", "aac", "-b:a", "128k",
+          "-filter_complex", "[0:v:0]setpts=(PTS-STARTPTS)*" + fallbackScale.toFixed(8) + ",tpad=stop_mode=clone:stop_duration=1,trim=duration=" + audioDuration.toFixed(3) + ",setpts=PTS-STARTPTS[vout]",
+          "-map", "[vout]", "-map", "1:a:0", "-map", "2:0",
+          "-t", audioDuration.toFixed(3),
+          "-c:v", "libx264", "-preset", "ultrafast", "-crf", "23",
+          "-threads", "1", "-pix_fmt", "yuv420p",
+          "-c:a", "aac", "-b:a", "128k",
           "-c:s", "mov_text", "-max_muxing_queue_size", "2048",
-          "-map_metadata", "0", "-shortest", "-movflags", "+faststart",
+          "-map_metadata", "0", "-movflags", "+faststart",
           outputPath
         ];
-        console.warn("FINAL RENDER MODE: safe original-video fallback");
+        console.warn("FINAL RENDER MODE: original-video fallback with video-only speed adjustment", "videoTimeScale:", fallbackScale, "audioDuration:", audioDuration);
         await runFFmpeg(fallbackArgs);
       }
     } else {
