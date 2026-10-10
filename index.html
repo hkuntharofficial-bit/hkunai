@@ -1449,13 +1449,11 @@ async function analyzeVideo(videoKey, mimeType, recapStyle) {
       key: videoKey,
       mimeType: mimeType || "video/mp4",
       recapStyle: recapStyle || "Movie Recap",
-      prompt: "Analyze the actual video, preserve chronology, and do not invent events."
+      prompt: "Understand the entire original video first. Do not split the video."
     })
   });
 
   let finished = false;
-  let analysisResponse;
-  let pollError = null;
   const startedAt = Date.now();
   while (!finished && Date.now() - startedAt < 30 * 60 * 1000) {
     try {
@@ -1466,52 +1464,45 @@ async function analyzeVideo(videoKey, mimeType, recapStyle) {
       const progress = await readJSON(progressResponse);
       if (progress.phase === "failed") throw new Error(progress.error || "Story Understanding မအောင်မြင်ပါ။");
       const completed = Number(progress.completed || 0);
-      const total = Number(progress.total || 0);
-      const percent = Number(progress.percent || 1);
-      const detail = progress.message || "AI က ဗီဒီယိုကို နားလည်နေပါသည်...";
-      if (progress.phase === "starting" || progress.phase === "splitting") {
-        // Split every source segment first; Story Understanding starts only
-        // after the full chunk set has been prepared.
-        setProgress(Math.max(24, Math.min(31, 24 + percent * 0.07)),
-          progress.message || "Story Understanding မစခင် ဗီဒီယိုအပိုင်းများကို ကြိုခွဲနေပါသည်...");
-        stages[0].textContent = total > 0
-          ? "Pre-splitting " + completed + "/" + total + "..."
-          : "Preparing video chunks...";
+      const total = Number(progress.total || 1);
+      const detail = progress.message || "AI က ဗီဒီယိုတစ်ပုဒ်လုံးကို နားလည်နေပါသည်...";
+      if (progress.phase === "uploading") {
+        setProgress(25, detail);
+        stages[0].textContent = "Original video readying...";
         stages[0].className = "stage-status active";
-        stages[1].textContent = "Waiting for all chunks...";
+        stages[1].textContent = "Waiting for whole-video analysis...";
         stages[1].className = "stage-status";
-      } else if (progress.phase === "analyzing") {
-        stages[0].textContent = "Video chunks ready";
+      } else if (progress.phase === "understanding") {
+        setProgress(Math.max(28, Math.min(46, Number(progress.percent || 20))), detail);
+        stages[0].textContent = "✓ Original video (not split)";
         stages[0].className = "stage-status done";
-        stages[1].textContent = total > 0
-          ? "Understanding " + completed + "/" + total + "..."
-          : "Analyzing story...";
+        stages[1].textContent = "Understanding entire video...";
         stages[1].className = "stage-status active";
-        setProgress(Math.max(31, Math.min(48, 31 + percent * 0.17)), detail);
-      } else if (progress.phase === "completed") {
-        stages[0].textContent = "Video chunks ready";
+      } else if (progress.phase === "segmenting") {
+        setProgress(49, detail);
+        stages[0].textContent = "✓ Original video (not split)";
         stages[0].className = "stage-status done";
-        stages[1].textContent = "Story Understanding complete";
+        stages[1].textContent = "✓ Whole-video understanding complete";
         stages[1].className = "stage-status done";
-        setProgress(48, "ဗီဒီယိုအပိုင်းအားလုံးကို ခွဲပြီး ဇာတ်လမ်းနားလည်မှု ပြီးပါပြီ။");
+      } else if (progress.phase === "completed") {
+        setProgress(52, detail);
+        stages[0].textContent = "✓ Original video analyzed without splitting";
+        stages[0].className = "stage-status done";
+        stages[1].textContent = "✓ Whole-video Story Understanding complete";
+        stages[1].className = "stage-status done";
         finished = true;
       }
-      if (progress.phase === "failed") throw new Error(progress.error || "Story Understanding မအောင်မြင်ပါ။");
     } catch (error) {
-      pollError = error;
       if (String(error?.message || "").includes("Story Understanding")) throw error;
     }
     if (!finished) await new Promise(resolve => setTimeout(resolve, 2500));
   }
-
-  if (!finished && Date.now() - startedAt >= 30 * 60 * 1000) {
-    throw new Error("Story Understanding က မိနစ် ၃၀ ကျော်ကြာနေပါသည်။ Render Logs ကို စစ်ဆေးပြီး ပြန်ကြိုးစားပါ။");
-  }
+  if (!finished) throw new Error("Story Understanding က မိနစ် ၃၀ ကျော်ကြာနေပါသည်။ Gemini/Render Logs ကို စစ်ဆေးပါ။");
   const response = await request;
-  analysisResponse = await readJSON(response);
+  const analysisResponse = await readJSON(response);
   if (!analysisResponse.ok || !String(analysisResponse.analysis || "").trim() ||
       !Array.isArray(analysisResponse.segments) || !analysisResponse.segments.length) {
-    throw new Error(analysisResponse.message || analysisResponse.error || "ဗီဒီယိုအပိုင်းခွဲခြမ်းစိတ်ဖြာမှုမှ အဖြေမရရှိပါ။");
+    throw new Error(analysisResponse.message || analysisResponse.error || "Whole-video Story Understanding အဖြေမရရှိပါ။");
   }
   return analysisResponse;
 }
