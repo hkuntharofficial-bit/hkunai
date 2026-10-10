@@ -2347,7 +2347,7 @@ app.post("/api/scene-plan", async (req, res) => {
     const raw = String(response.text || "").trim().replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "");
     const parsed = JSON.parse(raw);
     if (!Array.isArray(parsed.scenes)) throw new Error("No scenes array returned");
-    const scenes = parsed.scenes.slice(0, 12).map(s => ({ start: Number(s.start), end: Number(s.end), narration: String(s.narration || "").slice(0, 400) })).filter(s => Number.isFinite(s.start) && Number.isFinite(s.end) && s.start >= 0 && s.end > s.start && s.end - s.start >= 0.5);
+    const scenes = parsed.scenes.slice(0, 4).map(s => ({ start: Number(s.start), end: Number(s.end), narration: String(s.narration || "").slice(0, 400) })).filter(s => Number.isFinite(s.start) && Number.isFinite(s.end) && s.start >= 0 && s.end > s.start && s.end - s.start >= 0.5);
     if (!scenes.length) throw new Error("No valid scene timestamps returned");
     scenes.sort((a, b) => a.start - b.start);
     console.log("SCENE PLAN CREATED:", scenes.length, "scenes");
