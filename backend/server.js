@@ -2315,18 +2315,50 @@ app.post("/api/render-video", renderUpload.single("audio"), async (req, res) => 
     if (!Number.isFinite(sourceDuration) || sourceDuration <= 0) throw new Error("Could not determine source video duration");
     if (!Number.isFinite(audioDuration) || audioDuration <= 0 || audioDuration > 7200) throw new Error("Invalid narration duration");
 
-    const scale = audioDuration / sourceDuration;
+    // Concatenate selected source scenes in planned order before synchronizing
+    // the complete video to the single continuous narration track.
+    const effectiveScenes = (scenePlan.length ? scenePlan : [{ start: 0, end: sourceDuration }])
+      .map(s => ({
+        start: Math.max(0, Math.min(sourceDuration, s.start)),
+        end: Math.max(0, Math.min(sourceDuration, s.end))
+      }))
+      .filter(s => s.end > s.start + 0.05)
+      .slice(0, 40);
+    if (!effectiveScenes.length) effectiveScenes.push({ start: 0, end: sourceDuration });
+    const totalSelectedDuration = effectiveScenes.reduce((sum, s) => sum + s.end - s.start, 0);
+    if (!(totalSelectedDuration > 0)) throw new Error("Scene plan contains no usable video segments");
+    const scale = audioDuration / totalSelectedDuration;
+    const filterParts = [];
+    if (effectiveScenes.length === 1) {
+      const s = effectiveScenes[0];
+      filterParts.push("[0:v:0]trim=start=" + s.start.toFixed(3) + ":end=" + s.end.toFixed(3) + ",setpts=PTS-STARTPTS[vjoined]");
+    } else {
+      const sourceLabels = effectiveScenes.map((_, i) => "[src" + i + "]");
+      filterParts.push("[0:v:0]split=" + effectiveScenes.length + sourceLabels.join(""));
+      effectiveScenes.forEach((s, i) => {
+        filterParts.push(sourceLabels[i] + "trim=start=" + s.start.toFixed(3) +
+          ":end=" + s.end.toFixed(3) + ",setpts=PTS-STARTPTS[v" + i + "]");
+      });
+      filterParts.push(effectiveScenes.map((_, i) => "[v" + i + "]").join("") +
+        "concat=n=" + effectiveScenes.length + ":v=1:a=0[vjoined]");
+    }
+    filterParts.push("[vjoined]setpts=(PTS-STARTPTS)*" + scale.toFixed(8) +
+      ",tpad=stop_mode=clone:stop_duration=1,trim=duration=" + audioDuration.toFixed(3) +
+      ",setpts=PTS-STARTPTS[vout]");
     const args = [
       "-hide_banner", "-y", "-loglevel", "warning",
       "-i", sourcePath, "-i", audioPath, "-f", "srt", "-i", subtitlePath,
-      "-filter_complex", "[0:v:0]setpts=(PTS-STARTPTS)*" + scale.toFixed(8) + ",tpad=stop_mode=clone:stop_duration=1,trim=duration=" + audioDuration.toFixed(3) + ",setpts=PTS-STARTPTS[vout]",
+      "-filter_complex", filterParts.join(";"),
       "-map", "[vout]", "-map", "1:a:0", "-map", "2:0", "-t", audioDuration.toFixed(3),
       "-c:v", "libx264", "-preset", "ultrafast", "-crf", "28", "-threads", "1", "-pix_fmt", "yuv420p",
       "-af", "volume=" + audioVolume.toFixed(2),
       "-c:a", "aac", "-b:a", "128k", "-c:s", "mov_text", "-max_muxing_queue_size", "512",
       "-map_metadata", "0", "-movflags", "+faststart", outputPath
     ];
-    console.log("LOW-MEMORY FINAL RENDER:", { sourceDuration, audioDuration, scale, audioVolume, sceneCount: scenePlan.length });
+    console.log("SEGMENT-CONCAT FINAL RENDER:", {
+      sourceDuration, audioDuration, totalSelectedDuration, scale, audioVolume,
+      sceneCount: effectiveScenes.length
+    });
     await runFFmpeg(args);
 
     const stat = fs.statSync(outputPath);
