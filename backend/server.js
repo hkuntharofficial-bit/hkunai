@@ -2181,104 +2181,27 @@ app.post("/api/render-video", renderUpload.single("audio"), async (req, res) => 
     const sourceStat = fs.statSync(sourcePath);
     if (!sourceStat.size) throw new Error("Source video download is empty");
 
-    if (scenePlan.length && Number.isFinite(audioDuration) && audioDuration > 0) {
-      // Bound scene count and verify source duration before launching FFmpeg.
-      const probe = spawnSync(ffmpegPath, ["-hide_banner","-i",sourcePath], { encoding: "utf8", timeout: 15000 });
-      const probeText = String(probe.stderr || "") + "\n" + String(probe.stdout || "");
-      const durationMatch = probeText.match(/Duration:\s*(\d+):(\d+):(\d+(?:\.\d+)?)/i);
-      const sourceDuration = durationMatch ? Number(durationMatch[1]) * 3600 + Number(durationMatch[2]) * 60 + Number(durationMatch[3]) : NaN;
-      // FFmpeg may omit Duration for some MP4/container variants. Do not abort
-      // the entire recap just because the probe text cannot be parsed: attempt
-      // the scene edit, and let the guarded montage fallback handle bad timestamps.
-      const safeSourceDuration = Number.isFinite(sourceDuration) && sourceDuration > 0
-        ? sourceDuration
-        : Math.max(0, ...scenePlan.map(s => s.end));
-      if (!Number.isFinite(sourceDuration) || sourceDuration <= 0) {
-        console.warn("SOURCE DURATION PROBE UNAVAILABLE; validating scene plan against its latest timestamp");
-      }
-      scenePlan = scenePlan.slice(0, 4).filter(s => s.start < safeSourceDuration && s.end <= safeSourceDuration + 0.05);
-      if (!scenePlan.length) {
-        console.warn("AI scene timestamps could not be validated; using a single opening segment and guarded render fallback");
-        scenePlan = [{ start: 0, end: Math.max(0.5, safeSourceDuration) }];
-      }
-      // Use independent seeked inputs rather than split=N; split branches can buffer large videos and exhaust Render memory.
-      const args = ["-hide_banner","-y","-loglevel","warning"];
-      scenePlan.forEach(s => { args.push("-ss", s.start.toFixed(3), "-t", (s.end-s.start).toFixed(3), "-i", sourcePath); });
-      const audioIndex = scenePlan.length;
-      const subtitleIndex = audioIndex + 1;
-      args.push("-i", audioPath, "-f", "srt", "-i", subtitlePath);
-      const filters = [];
-      const labels = [];
-      // Keep the narration untouched. Uniformly retime only the selected video
-      // clips so their combined duration matches the actual narration duration.
-      const selectedVideoSeconds = scenePlan.reduce((sum, s) => sum + (s.end - s.start), 0);
-      const videoTimeScale = selectedVideoSeconds > 0 ? audioDuration / selectedVideoSeconds : 1;
-      scenePlan.forEach((s, i) => {
-        const label = "v" + i;
-        filters.push("[" + i + ":v:0]setpts=(PTS-STARTPTS)*" + videoTimeScale.toFixed(8) + "[" + label + "]");
-        labels.push("[" + label + "]");
-      });
-      filters.push(labels.join("") + "concat=n=" + scenePlan.length + ":v=1:a=0,tpad=stop_mode=clone:stop_duration=1,trim=duration=" + audioDuration.toFixed(3) + ",setpts=PTS-STARTPTS[vout]");
-      args.push("-filter_complex", filters.join(";"), "-map", "[vout]", "-map", audioIndex + ":a:0", "-map", subtitleIndex + ":0", "-t", audioDuration.toFixed(3), "-c:v", "libx264", "-preset", "ultrafast", "-crf", "23", "-threads", "1", "-pix_fmt", "yuv420p", "-c:a", "aac", "-b:a", "128k", "-c:s", "mov_text", "-max_muxing_queue_size", "2048", "-map_metadata", "0", "-shortest", "-movflags", "+faststart", outputPath);
-      console.log("FINAL RENDER MODE: low-memory scene montage with video-only speed adjustment", scenePlan.length, "scenes", "sourceDuration:", sourceDuration, "selectedVideoSeconds:", selectedVideoSeconds, "videoTimeScale:", videoTimeScale, "audioDuration:", audioDuration);
-      try {
-        await runFFmpeg(args);
-      } catch (sceneRenderError) {
-        // Do not fail the whole recap if an individual scene has incompatible timestamps/codecs.
-        // Produce a valid narration MP4 from the original source as a safe fallback.
-        console.error("SCENE MONTAGE FAILED; FALLING BACK TO ORIGINAL VIDEO:", String(sceneRenderError?.message || sceneRenderError).slice(0, 1200));
-        try { fs.rmSync(outputPath, { force: true }); } catch {}
-        // Fallback also retimes video to narration length. Audio is never
-        // sped up, slowed down, trimmed, or regenerated here.
-        const fallbackScale = Number.isFinite(sourceDuration) && sourceDuration > 0
-          ? audioDuration / sourceDuration
-          : 1;
-        const fallbackArgs = [
-          "-hide_banner", "-y", "-loglevel", "warning",
-          "-i", sourcePath, "-i", audioPath,
-          "-f", "srt", "-i", subtitlePath,
-          "-filter_complex", "[0:v:0]setpts=(PTS-STARTPTS)*" + fallbackScale.toFixed(8) + ",tpad=stop_mode=clone:stop_duration=1,trim=duration=" + audioDuration.toFixed(3) + ",setpts=PTS-STARTPTS[vout]",
-          "-map", "[vout]", "-map", "1:a:0", "-map", "2:0",
-          "-t", audioDuration.toFixed(3),
-          "-c:v", "libx264", "-preset", "ultrafast", "-crf", "23",
-          "-threads", "1", "-pix_fmt", "yuv420p",
-          "-c:a", "aac", "-b:a", "128k",
-          "-c:s", "mov_text", "-max_muxing_queue_size", "2048",
-          "-map_metadata", "0", "-movflags", "+faststart",
-          outputPath
-        ];
-        console.warn("FINAL RENDER MODE: original-video fallback with video-only speed adjustment", "videoTimeScale:", fallbackScale, "audioDuration:", audioDuration);
-        await runFFmpeg(fallbackArgs);
-      }
-    } else {
-      // No scene plan: retime the original video only, leaving generated audio
-      // duration and content unchanged. This avoids -shortest cutting narration
-      // or dropping the tail of the video when the durations differ.
-      const probe = spawnSync(ffmpegPath, ["-hide_banner", "-i", sourcePath], { encoding: "utf8", timeout: 15000 });
-      const probeText = String(probe.stderr || "") + "\n" + String(probe.stdout || "");
-      const durationMatch = probeText.match(/Duration:\s*(\d+):(\d+):(\d+(?:\.\d+)?)/i);
-      const sourceDuration = durationMatch ? Number(durationMatch[1]) * 3600 + Number(durationMatch[2]) * 60 + Number(durationMatch[3]) : NaN;
-      if (!Number.isFinite(sourceDuration) || sourceDuration <= 0) {
-        throw new Error("Could not determine source video duration to synchronize it with narration");
-      }
-      const videoTimeScale = audioDuration > 0 ? audioDuration / sourceDuration : 1;
-      const renderArgs = [
-        "-hide_banner", "-y", "-loglevel", "warning",
-        "-i", sourcePath, "-i", audioPath,
-        "-f", "srt", "-i", subtitlePath,
-        "-filter_complex", "[0:v:0]setpts=(PTS-STARTPTS)*" + videoTimeScale.toFixed(8) + ",tpad=stop_mode=clone:stop_duration=1,trim=duration=" + audioDuration.toFixed(3) + ",setpts=PTS-STARTPTS[vout]",
-        "-map", "[vout]", "-map", "1:a:0", "-map", "2:0",
-        "-t", audioDuration.toFixed(3),
-        "-c:v", "libx264", "-preset", "ultrafast", "-crf", "23",
-        "-threads", "1", "-pix_fmt", "yuv420p",
-        "-c:a", "aac", "-b:a", "128k",
-        "-c:s", "mov_text", "-max_muxing_queue_size", "2048",
-        "-map_metadata", "0", "-movflags", "+faststart",
-        outputPath
-      ];
-      console.log("FINAL RENDER MODE: original video retimed to narration", "sourceDuration:", sourceDuration, "videoTimeScale:", videoTimeScale, "audioDuration:", audioDuration);
-      await runFFmpeg(renderArgs);
-    }
+    // Low-memory render: decode the source only once to avoid FFmpeg OOM on Render.
+    // The generated narration is passed through unchanged; only video timing is adjusted.
+    const probe = spawnSync(ffmpegPath, ["-hide_banner", "-i", sourcePath], { encoding: "utf8", timeout: 20000 });
+    const probeText = String(probe.stderr || "") + "\n" + String(probe.stdout || "");
+    const match = probeText.match(/Duration:\s*(\d+):(\d+):(\d+(?:\.\d+)?)/i);
+    const sourceDuration = match ? Number(match[1]) * 3600 + Number(match[2]) * 60 + Number(match[3]) : NaN;
+    if (!Number.isFinite(sourceDuration) || sourceDuration <= 0) throw new Error("Could not determine source video duration");
+    if (!Number.isFinite(audioDuration) || audioDuration <= 0 || audioDuration > 7200) throw new Error("Invalid narration duration");
+
+    const scale = audioDuration / sourceDuration;
+    const args = [
+      "-hide_banner", "-y", "-loglevel", "warning",
+      "-i", sourcePath, "-i", audioPath, "-f", "srt", "-i", subtitlePath,
+      "-filter_complex", "[0:v:0]setpts=(PTS-STARTPTS)*" + scale.toFixed(8) + ",tpad=stop_mode=clone:stop_duration=1,trim=duration=" + audioDuration.toFixed(3) + ",setpts=PTS-STARTPTS[vout]",
+      "-map", "[vout]", "-map", "1:a:0", "-map", "2:0", "-t", audioDuration.toFixed(3),
+      "-c:v", "libx264", "-preset", "ultrafast", "-crf", "28", "-threads", "1", "-pix_fmt", "yuv420p",
+      "-c:a", "aac", "-b:a", "128k", "-c:s", "mov_text", "-max_muxing_queue_size", "512",
+      "-map_metadata", "0", "-movflags", "+faststart", outputPath
+    ];
+    console.log("LOW-MEMORY FINAL RENDER:", { sourceDuration, audioDuration, scale, sceneCount: scenePlan.length });
+    await runFFmpeg(args);
 
     const stat = fs.statSync(outputPath);
     if (!stat.size || stat.size < 1024) throw new Error("Rendered MP4 is empty or invalid");
