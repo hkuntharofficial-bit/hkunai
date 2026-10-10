@@ -2148,6 +2148,13 @@ app.post("/api/render-video", renderUpload.single("audio"), async (req, res) => 
   try {
     const key = String(req.body?.key || "");
     const subtitle = String(req.body?.subtitle || "").replace(/^\uFEFF/, "");
+    const audioDuration = Number(req.body?.audioDuration);
+    let scenePlan = [];
+    try {
+      const rawPlan = req.body?.scenePlan;
+      const parsedPlan = rawPlan ? JSON.parse(String(rawPlan)) : null;
+      if (Array.isArray(parsedPlan)) scenePlan = parsedPlan.slice(0, 40).map(s => ({ start: Number(s.start), end: Number(s.end) })).filter(s => Number.isFinite(s.start) && Number.isFinite(s.end) && s.start >= 0 && s.end > s.start);
+    } catch (planError) { console.warn("Invalid scene plan; using full source video:", planError.message); }
 
     if (!key.startsWith("uploads/")) {
       return res.status(400).json({ ok: false, error: "A valid uploaded video key is required" });
@@ -2168,9 +2175,30 @@ app.post("/api/render-video", renderUpload.single("audio"), async (req, res) => 
     const sourceStat = fs.statSync(sourcePath);
     if (!sourceStat.size) throw new Error("Source video download is empty");
 
-    // First try stream-copying the original video. This preserves the video
-    // bitstream exactly (no quality loss) and avoids the CPU/RAM spike that
-    // caused FFmpeg to be killed on Render for videos longer than ~3 minutes.
+    if (scenePlan.length && Number.isFinite(audioDuration) && audioDuration > 0) {
+      // Assemble selected source intervals in story order, then fit picture to narration duration.
+      const filters = [];
+      const labels = [];
+      scenePlan.forEach((s, i) => {
+        const label = "v" + i;
+        filters.push("[0:v:0]trim=start=" + s.start.toFixed(3) + ":end=" + s.end.toFixed(3) + ",setpts=PTS-STARTPTS[" + label + "]");
+        labels.push("[" + label + "]");
+      });
+      filters.push(labels.join("") + "concat=n=" + scenePlan.length + ":v=1:a=0,tpad=stop_mode=clone:stop_duration=" + audioDuration.toFixed(3) + ",trim=duration=" + audioDuration.toFixed(3) + ",setpts=PTS-STARTPTS[vout]");
+      const sceneArgs = [
+        "-hide_banner","-y","-loglevel","warning",
+        "-i",sourcePath,"-i",audioPath,"-f","srt","-i",subtitlePath,
+        "-filter_complex",filters.join(";"),
+        "-map","[vout]","-map","1:a:0","-map","2:0",
+        "-t",audioDuration.toFixed(3),
+        "-c:v","libx264","-preset","ultrafast","-crf","23","-threads","1","-pix_fmt","yuv420p",
+        "-c:a","aac","-b:a","128k","-c:s","mov_text",
+        "-max_muxing_queue_size","2048","-map_metadata","0","-shortest","-movflags","+faststart",outputPath
+      ];
+      console.log("FINAL RENDER MODE: narration-matched scene montage", scenePlan.length, "scenes", "audioDuration:", audioDuration);
+      await runFFmpeg(sceneArgs);
+    } else {
+    // No valid edit plan: preserve the original video and synchronize narration.
     const renderArgs = [
       "-hide_banner", "-y", "-loglevel", "warning",
       "-i", sourcePath,
@@ -2210,6 +2238,7 @@ app.post("/api/render-video", renderUpload.single("audio"), async (req, res) => 
         outputPath
       ];
       await runFFmpeg(encodeArgs);
+    }
     }
 
     const stat = fs.statSync(outputPath);
