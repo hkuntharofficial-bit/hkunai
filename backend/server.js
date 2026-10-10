@@ -5,6 +5,8 @@ const fs = require("fs");
 const path = require("path");
 const os = require("os");
 const crypto = require("crypto");
+const { spawn } = require("child_process");
+const ffmpegPath = require("ffmpeg-static");
 const { pipeline } = require("stream/promises");
 
 const {
@@ -2138,6 +2140,134 @@ setInterval(
   60 *
   1000
 );
+
+
+/* =========================================================
+   FINAL MP4 RENDERING
+   Receives the generated narration and SRT, combines them
+   with the source video stored in R2, then saves the MP4 to R2.
+========================================================= */
+
+const renderUpload = multer({
+  dest: TEMP_DIR,
+  limits: {
+    fileSize: 100 * 1024 * 1024,
+    files: 1,
+    fields: 10
+  }
+});
+
+function runFFmpeg(args) {
+  return new Promise((resolve, reject) => {
+    if (!ffmpegPath) return reject(new Error("FFmpeg binary is unavailable"));
+    const child = spawn(ffmpegPath, args, { stdio: ["ignore", "ignore", "pipe"] });
+    let stderr = "";
+    child.stderr.on("data", chunk => {
+      stderr = (stderr + chunk.toString()).slice(-12000);
+    });
+    child.on("error", reject);
+    child.on("close", code => {
+      if (code === 0) return resolve();
+      reject(new Error("FFmpeg exited with code " + code + ": " + stderr.slice(-2500)));
+    });
+  });
+}
+
+app.post("/api/render-video", renderUpload.single("audio"), async (req, res) => {
+  const audioPath = req.file?.path;
+  const subtitlePath = path.join(TEMP_DIR, "hkun-subtitles-" + crypto.randomUUID() + ".srt");
+  const outputPath = path.join(TEMP_DIR, "hkun-final-" + crypto.randomUUID() + ".mp4");
+
+  try {
+    const key = String(req.body?.key || "");
+    const subtitle = String(req.body?.subtitle || "").replace(/^\uFEFF/, "");
+
+    if (!key.startsWith("uploads/")) {
+      return res.status(400).json({ ok: false, error: "A valid uploaded video key is required" });
+    }
+    if (!req.file || !req.file.size) {
+      return res.status(400).json({ ok: false, error: "Generated narration audio is required" });
+    }
+    if (!subtitle.trim() || subtitle.length > 2_000_000) {
+      return res.status(400).json({ ok: false, error: "Valid SRT subtitle text is required (maximum 2 MB)" });
+    }
+
+    fs.writeFileSync(subtitlePath, subtitle, "utf8");
+
+    const sourceUrl = await getSignedUrl(
+      R2,
+      new GetObjectCommand({ Bucket: BUCKET, Key: key }),
+      { expiresIn: 3600 }
+    );
+
+    console.log("FINAL RENDER START:", key, "audioBytes:", req.file.size);
+
+    await runFFmpeg([
+      "-hide_banner", "-y", "-loglevel", "warning",
+      "-i", sourceUrl,
+      "-i", audioPath,
+      "-f", "srt", "-i", subtitlePath,
+      "-map", "0:v:0", "-map", "1:a:0", "-map", "2:0",
+      "-vf", "scale='min(1280,iw)':-2",
+      "-c:v", "libx264", "-preset", "veryfast", "-crf", "27",
+      "-pix_fmt", "yuv420p",
+      "-c:a", "aac", "-b:a", "128k",
+      "-c:s", "mov_text",
+      "-map_metadata", "-1",
+      "-shortest", "-movflags", "+faststart",
+      outputPath
+    ]);
+
+    const stat = fs.statSync(outputPath);
+    if (!stat.size || stat.size < 1024) throw new Error("Rendered MP4 is empty or invalid");
+
+    const outputKey = "outputs/hkun-recap-" + Date.now() + "-" + crypto.randomUUID() + ".mp4";
+    await R2.send(new PutObjectCommand({
+      Bucket: BUCKET,
+      Key: outputKey,
+      Body: fs.createReadStream(outputPath),
+      ContentLength: stat.size,
+      ContentType: "video/mp4"
+    }));
+
+    const downloadUrl = await getSignedUrl(
+      R2,
+      new GetObjectCommand({
+        Bucket: BUCKET,
+        Key: outputKey,
+        ResponseContentType: "video/mp4",
+        ResponseContentDisposition: 'attachment; filename="hkun-ai-recap.mp4"'
+      }),
+      { expiresIn: 86400 }
+    );
+
+    console.log("FINAL RENDER COMPLETE:", outputKey, "bytes:", stat.size);
+    return res.json({
+      ok: true,
+      key: outputKey,
+      downloadUrl,
+      sizeBytes: stat.size,
+      expiresInSeconds: 86400,
+      message: "MP4 rendered with Myanmar narration and embedded subtitles"
+    });
+  } catch (error) {
+    console.error("FINAL RENDER ERROR:", error?.stack || error);
+    if (!res.headersSent) {
+      return res.status(500).json({
+        ok: false,
+        error: "Final MP4 rendering failed",
+        message: String(error?.message || error).slice(0, 1200)
+      });
+    }
+  } finally {
+    for (const file of [audioPath, subtitlePath, outputPath]) {
+      if (file) {
+        try { fs.rmSync(file, { force: true }); } catch {}
+      }
+    }
+  }
+});
+
 
 /* =========================================================
 MYANMAR TEXT TO SPEECH
