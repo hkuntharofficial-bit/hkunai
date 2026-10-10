@@ -1646,6 +1646,13 @@ console.log(
         error
       );
 
+      // Give a useful message when the browser cannot reach the Render API.
+      const rawMessage = String(error?.message || error || "");
+      const friendlyMessage =
+        rawMessage.toLowerCase().includes("failed to fetch") ||
+        rawMessage.toLowerCase().includes("networkerror")
+          ? "Backend Server ကို ချိတ်ဆက်မရပါ။ Render မှာ hkunai-backend service ရဲ့ Status/Logs ကိုစစ်ပါ၊ ပြီးရင် Internet ပြန်စစ်ပြီး ထပ်ကြိုးစားပါ။"
+          : rawMessage;
 
       stages[0].textContent =
         "❌ Processing Failed";
@@ -1661,8 +1668,7 @@ console.log(
       errorBox.innerHTML =
         "❌ " +
         esc(
-          error.message ||
-          String(error)
+          friendlyMessage
         );
 
 
@@ -1676,8 +1682,7 @@ console.log(
       alert(
         "❌ Auto Recap မအောင်မြင်ပါ\n\n" +
         (
-          error.message ||
-          String(error)
+          friendlyMessage
         )
       );
 
