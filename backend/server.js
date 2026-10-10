@@ -2106,6 +2106,7 @@ function runFFmpeg(args) {
 
 app.post("/api/render-video", renderUpload.single("audio"), async (req, res) => {
   const audioPath = req.file?.path;
+  const sourcePath = path.join(TEMP_DIR, "hkun-source-" + crypto.randomUUID() + ".mp4");
   const subtitlePath = path.join(TEMP_DIR, "hkun-subtitles-" + crypto.randomUUID() + ".srt");
   const outputPath = path.join(TEMP_DIR, "hkun-final-" + crypto.randomUUID() + ".mp4");
 
@@ -2125,17 +2126,16 @@ app.post("/api/render-video", renderUpload.single("audio"), async (req, res) => 
 
     fs.writeFileSync(subtitlePath, subtitle, "utf8");
 
-    const sourceUrl = await getSignedUrl(
-      R2,
-      new GetObjectCommand({ Bucket: BUCKET, Key: key }),
-      { expiresIn: 3600 }
-    );
-
     console.log("FINAL RENDER START:", key, "audioBytes:", req.file.size);
+    // Download the source locally first. Streaming a long signed R2 URL directly
+    // into FFmpeg can fail on slow/free instances and hides useful network errors.
+    await downloadR2Object(key, sourcePath);
+    const sourceStat = fs.statSync(sourcePath);
+    if (!sourceStat.size) throw new Error("Source video download is empty");
 
     await runFFmpeg([
       "-hide_banner", "-y", "-loglevel", "warning",
-      "-i", sourceUrl,
+      "-i", sourcePath,
       "-i", audioPath,
       "-f", "srt", "-i", subtitlePath,
       "-map", "0:v:0", "-map", "1:a:0", "-map", "2:0",
@@ -2191,7 +2191,7 @@ app.post("/api/render-video", renderUpload.single("audio"), async (req, res) => 
       });
     }
   } finally {
-    for (const file of [audioPath, subtitlePath, outputPath]) {
+    for (const file of [audioPath, sourcePath, subtitlePath, outputPath]) {
       if (file) {
         try { fs.rmSync(file, { force: true }); } catch {}
       }
