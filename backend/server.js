@@ -2251,47 +2251,33 @@ app.post("/api/render-video", renderUpload.single("audio"), async (req, res) => 
         await runFFmpeg(fallbackArgs);
       }
     } else {
-    // No valid edit plan: preserve the original video and synchronize narration.
-    const renderArgs = [
-      "-hide_banner", "-y", "-loglevel", "warning",
-      "-i", sourcePath,
-      "-i", audioPath,
-      "-f", "srt", "-i", subtitlePath,
-      "-map", "0:v:0", "-map", "1:a:0", "-map", "2:0",
-      "-c:v", "copy",
-      "-c:a", "aac", "-b:a", "128k",
-      "-c:s", "mov_text",
-      "-max_muxing_queue_size", "2048",
-      "-map_metadata", "0",
-      "-shortest", "-movflags", "+faststart",
-      outputPath
-    ];
-    try {
-      console.log("FINAL RENDER MODE: stream-copy original video");
-      await runFFmpeg(renderArgs);
-    } catch (copyError) {
-      // Some source codecs cannot be muxed into MP4. Retry with a low-resource
-      // encode at the original dimensions; never downscale the user's source.
-      console.warn("Stream-copy render failed; retrying original-resolution encode:", String(copyError?.message || copyError).slice(0, 800));
-      try { fs.rmSync(outputPath, { force: true }); } catch {}
-      const encodeArgs = [
+      // No scene plan: retime the original video only, leaving generated audio
+      // duration and content unchanged. This avoids -shortest cutting narration
+      // or dropping the tail of the video when the durations differ.
+      const probe = spawnSync(ffmpegPath, ["-hide_banner", "-i", sourcePath], { encoding: "utf8", timeout: 15000 });
+      const probeText = String(probe.stderr || "") + "\n" + String(probe.stdout || "");
+      const durationMatch = probeText.match(/Duration:\s*(\d+):(\d+):(\d+(?:\.\d+)?)/i);
+      const sourceDuration = durationMatch ? Number(durationMatch[1]) * 3600 + Number(durationMatch[2]) * 60 + Number(durationMatch[3]) : NaN;
+      if (!Number.isFinite(sourceDuration) || sourceDuration <= 0) {
+        throw new Error("Could not determine source video duration to synchronize it with narration");
+      }
+      const videoTimeScale = audioDuration > 0 ? audioDuration / sourceDuration : 1;
+      const renderArgs = [
         "-hide_banner", "-y", "-loglevel", "warning",
-        "-i", sourcePath,
-        "-i", audioPath,
+        "-i", sourcePath, "-i", audioPath,
         "-f", "srt", "-i", subtitlePath,
-        "-map", "0:v:0", "-map", "1:a:0", "-map", "2:0",
+        "-filter_complex", "[0:v:0]setpts=(PTS-STARTPTS)*" + videoTimeScale.toFixed(8) + ",tpad=stop_mode=clone:stop_duration=1,trim=duration=" + audioDuration.toFixed(3) + ",setpts=PTS-STARTPTS[vout]",
+        "-map", "[vout]", "-map", "1:a:0", "-map", "2:0",
+        "-t", audioDuration.toFixed(3),
         "-c:v", "libx264", "-preset", "ultrafast", "-crf", "23",
-        "-threads", "1", "-thread_type", "slice",
-        "-pix_fmt", "yuv420p",
+        "-threads", "1", "-pix_fmt", "yuv420p",
         "-c:a", "aac", "-b:a", "128k",
-        "-c:s", "mov_text",
-        "-max_muxing_queue_size", "2048",
-        "-map_metadata", "0",
-        "-shortest", "-movflags", "+faststart",
+        "-c:s", "mov_text", "-max_muxing_queue_size", "2048",
+        "-map_metadata", "0", "-movflags", "+faststart",
         outputPath
       ];
-      await runFFmpeg(encodeArgs);
-    }
+      console.log("FINAL RENDER MODE: original video retimed to narration", "sourceDuration:", sourceDuration, "videoTimeScale:", videoTimeScale, "audioDuration:", audioDuration);
+      await runFFmpeg(renderArgs);
     }
 
     const stat = fs.statSync(outputPath);
