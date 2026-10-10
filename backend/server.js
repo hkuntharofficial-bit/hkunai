@@ -2267,7 +2267,7 @@ app.post("/api/tts", async (req, res) => {
   let tempDir;
 
   try {
-    const { text, voice, speed, voiceStyle } = req.body || {};
+    const { text, voice, speed, voicePitch } = req.body || {};
     if (typeof text !== "string" || !text.trim()) {
       return res.status(400).json({ ok: false, error: "Myanmar text is required" });
     }
@@ -2303,8 +2303,8 @@ app.post("/api/tts", async (req, res) => {
         if (!stat.isFile() || stat.size < 100) {
           throw new Error("TTS returned an empty or invalid audio file");
         }
-        const style = ["child", "adult", "deep"].includes(voiceStyle) ? voiceStyle : "adult";
-        const pitchFactor = style === "child" ? 1.18 : style === "deep" ? 0.88 : 1;
+        const requestedPitch = Number(voicePitch ?? 1);
+        const pitchFactor = Number.isFinite(requestedPitch) ? Math.max(0.85, Math.min(1.20, requestedPitch)) : 1;
         if (pitchFactor !== 1) {
           const pitchedPath = path.join(tempDir, "speech-pitched.mp3");
           const pitchResult = spawnSync("ffmpeg", [
