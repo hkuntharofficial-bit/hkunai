@@ -2426,7 +2426,7 @@ app.post("/api/render-video", renderUpload.single("audio"), async (req, res) => 
         end: Math.max(0, Math.min(sourceDuration, s.end))
       }))
       .filter(s => s.end > s.start + 0.05)
-      .slice(0, 40);
+      .slice(0, 4);
     if (!effectiveScenes.length) effectiveScenes.push({ start: 0, end: sourceDuration });
     const totalSelectedDuration = effectiveScenes.reduce((sum, s) => sum + s.end - s.start, 0);
     if (!(totalSelectedDuration > 0)) throw new Error("Scene plan contains no usable video segments");
