@@ -2127,7 +2127,7 @@ app.post("/api/render-video", renderUpload.single("audio"), async (req, res) => 
 
     fs.writeFileSync(subtitlePath, subtitle, "utf8");
 
-    console.log("FINAL RENDER START:", key, "audioBytes:", req.file.size);
+    console.log("FINAL RENDER START:", key, "audioBytes:", req.file.size, "audioPath:", audioPath);
     // Download the source locally first. Streaming a long signed R2 URL directly
     // into FFmpeg can fail on slow/free instances and hides useful network errors.
     await downloadR2Object(key, sourcePath);
@@ -2141,11 +2141,12 @@ app.post("/api/render-video", renderUpload.single("audio"), async (req, res) => 
       "-f", "srt", "-i", subtitlePath,
       "-map", "0:v:0", "-map", "1:a:0", "-map", "2:0",
       // Keep peak memory low on Render's free instance; 720p is sufficient for recap output.
-      "-vf", "scale='min(960,iw)':-2",
-      "-c:v", "libx264", "-preset", "ultrafast", "-crf", "30",
-      "-threads", "1",
+      "-vf", "fps=24,scale='min(640,iw)':-2",
+      // Render at 640px/24fps to avoid FFmpeg being OOM-killed on Render free instances.
+      "-c:v", "libx264", "-preset", "ultrafast", "-crf", "32",
+      "-threads", "1", "-thread_type", "slice",
       "-pix_fmt", "yuv420p",
-      "-c:a", "aac", "-b:a", "96k",
+      "-c:a", "aac", "-b:a", "64k",
       "-c:s", "mov_text",
       "-max_muxing_queue_size", "2048",
       "-map_metadata", "-1",
