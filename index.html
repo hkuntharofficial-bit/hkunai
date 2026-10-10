@@ -1515,7 +1515,7 @@ function srtTimestamp(seconds) {
   return `${hh}:${mm}:${ss},${mmm}`;
 }
 
-async function renderFinalVideo(videoKey) {
+async function renderFinalVideo(videoKey, scenePlan, audioDuration) {
   const audioBlob = window.hkunVoiceBlob;
   const subtitleText = window.hkunSubtitleText;
   if (!audioBlob || !subtitleText) {
@@ -1534,6 +1534,8 @@ async function renderFinalVideo(videoKey) {
   form.append("key", videoKey);
   form.append("subtitle", subtitleText);
   form.append("audio", audioBlob, "hkun-myanmar-voice.mp3");
+  form.append("audioDuration", String(audioDuration || 0));
+  if (Array.isArray(scenePlan) && scenePlan.length) form.append("scenePlan", JSON.stringify(scenePlan));
   document.getElementById("finalVideoMessage").textContent =
     "ဗီဒီယို၊ မြန်မာအသံနှင့် စာတန်းထိုးကို ပေါင်းစည်းနေပါသည်။ မပိတ်ဘဲ စောင့်ပေးပါ။";
 
@@ -1759,8 +1761,29 @@ window.hkunRecapScript =
 setProgress(70,"မြန်မာအသံနှင့် SRT စာတန်းထိုး ထုတ်လုပ်နေပါသည်...");
 await window.generateMyanmarVoice(scriptResult.script);
 
-      setProgress(82,"အသံနှင့် စာတန်းထိုး အဆင်သင့်ဖြစ်ပါပြီ — MP4 Rendering စတင်နေပါသည်...");
-      await window.renderFinalVideo(result.key);
+      setProgress(82,"မြန်မာအသံနဲ့ ကိုက်ညီတဲ့ မူရင်းဇာတ်ဝင်ခန်းတွေ ရွေးချယ်နေပါသည်...");
+      const voiceAudio = document.getElementById("voiceAudio");
+      const narrationDuration = Number(voiceAudio?.duration || 0);
+      if (!Number.isFinite(narrationDuration) || narrationDuration < 1) {
+        throw new Error("အသံဖိုင်ကြာချိန် မရရှိပါ။ အသံ MP3 ကို ဖွင့်ပြီး ပြန်ကြိုးစားပါ။");
+      }
+      const planResponse = await fetch(BACKEND + "/api/scene-plan", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          analysis: analysis.analysis,
+          script: scriptResult.script,
+          audioDuration: narrationDuration
+        })
+      });
+      const planResult = await readJSON(planResponse);
+      if (!planResponse.ok || !planResult.ok || !Array.isArray(planResult.scenes) || !planResult.scenes.length) {
+        throw new Error(planResult.message || planResult.error || "အသံနဲ့ ကိုက်ညီတဲ့ ဇာတ်ဝင်ခန်းအစီအစဉ် မရရှိပါ။");
+      }
+      stages[4].textContent = "✓ " + planResult.scenes.length + " matching scenes planned";
+      stages[4].className = "stage-status done";
+      setProgress(86,"ကိုက်ညီတဲ့ ဇာတ်ဝင်ခန်း " + planResult.scenes.length + " ခု ရရှိပါပြီ — MP4 တည်းဖြတ်နေပါသည်...");
+      await window.renderFinalVideo(result.key, planResult.scenes, narrationDuration);
        
 stages[2].textContent =
   "✓ Myanmar recap script completed";
