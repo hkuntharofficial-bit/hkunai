@@ -1612,15 +1612,26 @@ async function generateMyanmarVoice(scriptText) {
   // Estimate subtitle timings over the actual narration duration.
   const audioElement = document.getElementById("voiceAudio");
   const duration = await new Promise((resolve) => {
-    if (Number.isFinite(audioElement.duration) && audioElement.duration > 0) {
-      resolve(audioElement.duration);
+    let settled = false;
+    let timer;
+    const finish = (value) => {
+      if (settled) return;
+      settled = true;
+      if (timer) clearTimeout(timer);
+      const actual = Number(value);
+      resolve(Number.isFinite(actual) && actual > 0 ? actual : 0);
+    };
+    timer = setTimeout(() => finish(0), 15000);
+    const currentDuration = Number(audioElement.duration);
+    if (Number.isFinite(currentDuration) && currentDuration > 0) {
+      finish(currentDuration);
       return;
     }
-    const timer = setTimeout(() => resolve(0), 8000);
-    audioElement.addEventListener("loadedmetadata", () => {
-      clearTimeout(timer);
-      resolve(Number.isFinite(audioElement.duration) ? audioElement.duration : 0);
+    audioElement.addEventListener("loadedmetadata", () => finish(audioElement.duration), { once: true });
+    audioElement.addEventListener("durationchange", () => {
+      if (Number.isFinite(audioElement.duration) && audioElement.duration > 0) finish(audioElement.duration);
     }, { once: true });
+    audioElement.addEventListener("error", () => finish(0), { once: true });
   });
 
   const sentences = String(scriptText).replace(/\r/g, "")
