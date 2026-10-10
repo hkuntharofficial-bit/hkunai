@@ -2369,7 +2369,7 @@ app.post("/api/render-video", renderUpload.single("audio"), async (req, res) => 
     const requestedAudioDuration = Number(req.body?.audioDuration);
     const effectiveAudioDuration = Number.isFinite(measuredAudioDuration) && measuredAudioDuration > 0
       ? measuredAudioDuration
-      : effectiveAudioDuration;
+      : requestedAudioDuration;
     if (!Number.isFinite(effectiveAudioDuration) || effectiveAudioDuration <= 0 || effectiveAudioDuration > 7200) {
       throw new Error("Narration MP3 duration could not be determined. Please regenerate the Myanmar Voice audio.");
     }
