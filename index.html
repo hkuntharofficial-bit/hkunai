@@ -100,6 +100,8 @@ margin-top:5px;cursor:pointer
 .setup-nav button{flex:1;padding:14px 10px;border-radius:12px;border:1px solid #343844;background:#191c24;color:#fff;font-size:14px;font-weight:700;cursor:pointer}
 .setup-nav .next{background:#ff3b30;border-color:#ff3b30}
 .setup-nav button:disabled{opacity:.35}
+.setup-nav .back{background:#191c24;border-color:#343844}
+.setup-nav .back[hidden]{display:none!important}
 /* Keep exactly one navigation control per setup page */
 .setup-nav{display:flex;gap:10px;margin:18px 0}
 .setup-nav button{width:100%;flex:1}
@@ -259,7 +261,7 @@ value="1.3"
 
 
 </section>
-<div class="setup-nav"><button type="button" class="next" data-setup-next="1">ရှေ့ဆက် →</button></div>
+<div class="setup-nav"><button type="button" class="back" data-setup-back="0">← နောက်သို့</button><button type="button" class="next" data-setup-next="1">ရှေ့ဆက် →</button></div>
 
 <section class="setup-page" data-setup-page="1">
 <!-- STYLE -->
@@ -363,7 +365,7 @@ Original Video Speed:
 
 
 </section>
-<div class="setup-nav"><button type="button" class="next" data-setup-next="2">ရှေ့ဆက် →</button></div>
+<div class="setup-nav"><button type="button" class="back" data-setup-back="1">← နောက်သို့</button><button type="button" class="next" data-setup-next="2">ရှေ့ဆက် →</button></div>
 
 <section class="setup-page" data-setup-page="2">
 <!-- LOGO -->
@@ -506,7 +508,7 @@ checked
 
 
 </section>
-<div class="setup-nav"><button type="button" class="next" data-setup-next="3">ရှေ့ဆက် →</button></div>
+<div class="setup-nav"><button type="button" class="back" data-setup-back="2">← နောက်သို့</button><button type="button" class="next" data-setup-next="3">ရှေ့ဆက် →</button></div>
 
 <section class="setup-page" data-setup-page="3">
 <!-- SUBTITLE -->
@@ -604,7 +606,7 @@ Audio Timeline ကို Master Timeline အဖြစ် အသုံးပြ�
 
 
 </section>
-<div class="setup-nav"></div>
+<div class="setup-nav"><button type="button" class="back" data-setup-back="3">← နောက်သို့</button></div>
 
 <!-- PROCESSING -->
 
@@ -834,9 +836,9 @@ function showSetupPage(page) {
     el.classList.toggle("current", i === target);
     el.classList.toggle("visited", i < target);
   });
-  // Navigation rows sit between sections, so hide every row except the active page's.
+  // Show only the navigation row belonging to the current page.
   document.querySelectorAll(".setup-nav").forEach((el, i) => {
-    el.style.display = (i === target && target < 3) ? "flex" : "none";
+    el.style.display = (i === target) ? "flex" : "none";
   });
   const title = document.getElementById("setupPageTitle");
   const count = document.getElementById("setupPageCount");
@@ -857,16 +859,13 @@ document.querySelectorAll("[data-setup-next]").forEach(button => {
 document.querySelectorAll("[data-setup-back]").forEach(button => {
   button.addEventListener("click", () => showSetupPage(button.dataset.setupBack));
 });
-// A single forward button per setup page; browser back is not duplicated in the UI.
-const setupNavs = document.querySelectorAll(".setup-page");
-setupNavs.forEach((page, index) => {
-  const nav = page.nextElementSibling;
-  if (nav?.classList.contains("setup-nav")) {
-    nav.querySelectorAll("button").forEach(button => {
-      if (button.hasAttribute("data-setup-back") || button.disabled) button.remove();
-    });
-    if (index === 3) nav.style.display = "none";
-  }
+// Keep exactly one Back and one Next control at the bottom of each setup step.
+document.querySelectorAll(".setup-nav").forEach((nav, index) => {
+  nav.querySelectorAll("button").forEach(button => {
+    if (button.hasAttribute("data-setup-back")) {
+      button.style.display = index === 0 ? "none" : "";
+    }
+  });
 });
 
 /* =====================================
