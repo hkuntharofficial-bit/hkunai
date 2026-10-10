@@ -2286,7 +2286,9 @@ app.post("/api/merge-audio", mergeAudioUpload.array("audioChunks", 100), async (
     if (!stat.size) throw new Error("Merged narration audio is empty");
     res.setHeader("Content-Type", "audio/mpeg");
     res.setHeader("Content-Length", String(stat.size));
-    return fs.createReadStream(outputPath).pipe(res);
+    // Wait until the response has fully streamed before finally() removes the temp MP3.
+    await pipeline(fs.createReadStream(outputPath), res);
+    return;
   } catch (error) {
     console.error("MERGE AUDIO ERROR:", error?.stack || error);
     if (!res.headersSent) return res.status(500).json({ ok: false, error: "Could not merge narration audio", message: String(error?.message || error).slice(0, 800) });
