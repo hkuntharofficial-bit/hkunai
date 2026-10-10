@@ -1696,6 +1696,7 @@ async function renderFinalVideo(videoKey, scenePlan, audioDuration) {
     stages[5].className = "stage-status active";
     stages[7].textContent = "❌ Final Rendering Failed";
     stages[7].className = "stage-status active";
+    console.error("HKUN AI final render failed:", error);
     document.getElementById("finalVideoMessage").textContent =
       "MP4 ပေါင်းစည်း/ထုတ်လုပ်မှု မပြီးဆုံးပါ။ အသံ MP3 နှင့် SRT ကို ထိန်းသိမ်းထားပြီး ထပ်ကြိုးစားနိုင်ပါသည်။ အမှား: " + detail;
     setProgress(82, "Final Rendering မအောင်မြင်ပါ — MP4 ဖိုင်မထွက်သေးပါ။");
