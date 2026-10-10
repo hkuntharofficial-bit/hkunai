@@ -250,13 +250,12 @@ accept="video/*,.mp4,.mov,.mkv"
 </div>
 
 <div class="field">
-<label for="voicePitch">🗣️ အသံအသက်အရွယ် ချိန်ညှိမှု: <span id="voicePitchText" class="speed">လူကြီး / ပုံမှန်</span></label>
+<label for="voicePitch">🗣️ အသံအသက်အရွယ် ချိန်ညှိမှု: <span id="voicePitchText" class="speed">100%</span></label>
 <div class="pitch-control-row">
-<span>လူကြီးအသံ</span>
+<span>လူကြီး</span>
 <input id="voicePitch" type="range" min="0.85" max="1.20" step="0.01" value="1" aria-label="Voice age and pitch">
-<span>လူငယ်/ကလေးသံ</span>
+<span>လူငယ်</span>
 </div>
-<p class="hint">Slider ကို ဘယ်ဘက်ရွှေ့လျှင် အသံနိမ့်၊ ညာဘက်ရွှေ့လျှင် အသံမြင့်လာမည်။ လူကြီးနှင့် လူငယ်အသံကို ကိုယ်တိုင်ချိန်နိုင်သည်။</p>
 </div>
 <div class="field">
 <label for="voiceSpeed">Voice Speed: <span id="voiceSpeedText" class="speed">1.30×</span></label>
@@ -1089,7 +1088,7 @@ const voicePitch = document.getElementById("voicePitch");
 const voicePitchText = document.getElementById("voicePitchText");
 function updateVoicePitch() {
   const value = Number(voicePitch.value);
-  voicePitchText.textContent = value < 0.97 ? "လူကြီးအသံ — နိမ့်" : value > 1.04 ? "လူငယ်/ကလေးဆန်သော အသံ — မြင့်" : "လူကြီး / ပုံမှန်";
+  voicePitchText.textContent = Math.round(value * 100) + "%";
 }
 voicePitch.addEventListener("input", updateVoicePitch);
 updateVoicePitch();
