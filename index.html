@@ -1509,7 +1509,7 @@ async function analyzeVideo(videoKey, mimeType, recapStyle) {
 
 let hkunVoiceObjectUrl = null;
 
-function splitTextForTTS(text, maxLength = 4500) {
+function splitTextForTTS(text, maxLength = 16000) {
   const chunks = [];
   let remaining = String(text || "").trim();
 
@@ -1549,7 +1549,7 @@ async function generateMyanmarVoice(scriptText) {
   }
   // Run a small worker pool concurrently; keep results indexed so narration
   // always plays in the original script order.
-  const concurrency = Math.min(3, chunks.length);
+  const concurrency = Math.min(2, chunks.length);
   let nextChunk = 0;
   let completedChunks = 0;
   const voiceName = document.getElementById("voice").value;
