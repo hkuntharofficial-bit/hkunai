@@ -997,10 +997,7 @@ document.querySelectorAll(".wizard-step").forEach((el,i)=>{
   el.classList.toggle("done",i<active);
 });
 
-if(stages[0] && msg){
-  stages[0].textContent=msg;
-  stages[0].className="stage-status active";
-}
+// Keep the overall progress message separate from the individual pipeline stage statuses.
 }
 
 
@@ -1869,7 +1866,7 @@ startButton.addEventListener(
         ).value;
 
 
-      setProgress(28,"AI က မူရင်းဗီဒီယိုကို ခွဲခြမ်းစိတ်ဖြာနေပါသည်...");
+      setProgress(28,"AI က ဗီဒီယိုအပိုင်းများကို ခွဲခြမ်းစိတ်ဖြာနေပါသည်။ အပိုင်းတစ်ခုစီပြီးသည်နှင့် ဆက်လက်လုပ်ဆောင်ပါမည်...");
       const analysis =
         await analyzeVideo(
 
@@ -1902,28 +1899,40 @@ const recapSegments = Array.isArray(analysis.segments) && analysis.segments.leng
   ? analysis.segments
   : [{ index: 1, start: 0, end: 0, analysis: analysis.analysis }];
 
-const recapScriptParts = [];
-for (let i = 0; i < recapSegments.length; i++) {
-  const segment = recapSegments[i];
-  setProgress(55 + ((i + 1) / recapSegments.length) * 8,
-    "အပိုင်းလိုက် Recap ဖန်တီးနေပါသည်... " + (i + 1) + "/" + recapSegments.length);
-  stages[2].textContent = "Generating recap " + (i + 1) + "/" + recapSegments.length + "...";
-  stages[2].className = "stage-status active";
-  const scriptResponse = await fetch(BACKEND + "/api/generate-script", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      analysis: segment.analysis,
-      recapStyle: document.getElementById("style").value,
-      voice: document.getElementById("voice").value
-    })
-  });
-  const scriptResult = await readJSON(scriptResponse);
-  if (!scriptResult.script || !String(scriptResult.script).trim()) {
-    throw new Error("ဗီဒီယိုအပိုင်း " + (i + 1) + " အတွက် Recap စာသား မရရှိပါ။");
+// Generate segment scripts concurrently with a small worker pool. Keep the
+// original segment order when joining, even if later requests finish first.
+const recapScriptParts = new Array(recapSegments.length);
+let nextRecapIndex = 0;
+let completedRecaps = 0;
+const recapWorkerCount = Math.min(3, recapSegments.length);
+async function recapScriptWorker() {
+  while (true) {
+    const i = nextRecapIndex++;
+    if (i >= recapSegments.length) return;
+    const segment = recapSegments[i];
+    setProgress(55 + (completedRecaps / recapSegments.length) * 8,
+      "အပိုင်းလိုက် Recap ကို တစ်ပြိုင်နက်ဖန်တီးနေပါသည်... " + completedRecaps + "/" + recapSegments.length);
+    const scriptResponse = await fetch(BACKEND + "/api/generate-script", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        analysis: segment.analysis,
+        recapStyle: document.getElementById("style").value,
+        voice: document.getElementById("voice").value
+      })
+    });
+    const scriptResult = await readJSON(scriptResponse);
+    if (!scriptResult.script || !String(scriptResult.script).trim()) {
+      throw new Error("ဗီဒီယိုအပိုင်း " + (i + 1) + " အတွက် Recap စာသား မရရှိပါ။");
+    }
+    recapScriptParts[i] = String(scriptResult.script).trim();
+    completedRecaps++;
+    stages[2].textContent = "Generating recap " + completedRecaps + "/" + recapSegments.length + "...";
+    setProgress(55 + (completedRecaps / recapSegments.length) * 8,
+      "Recap အပိုင်း " + completedRecaps + "/" + recapSegments.length + " ပြီးပါပြီ...");
   }
-  recapScriptParts.push(String(scriptResult.script).trim());
 }
+await Promise.all(Array.from({ length: recapWorkerCount }, () => recapScriptWorker()));
 const scriptResult = {
   script: recapScriptParts.join("\n\n")
 };
