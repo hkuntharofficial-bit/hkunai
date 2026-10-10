@@ -2155,6 +2155,8 @@ app.post("/api/render-video", renderUpload.single("audio"), async (req, res) => 
     const key = String(req.body?.key || "");
     const subtitle = String(req.body?.subtitle || "").replace(/^\uFEFF/, "");
     const audioDuration = Number(req.body?.audioDuration);
+    const requestedVolume = Number(req.body?.audioVolume ?? 1);
+    const audioVolume = Number.isFinite(requestedVolume) ? Math.max(0, Math.min(2, requestedVolume)) : 1;
     let scenePlan = [];
     try {
       const rawPlan = req.body?.scenePlan;
@@ -2197,10 +2199,11 @@ app.post("/api/render-video", renderUpload.single("audio"), async (req, res) => 
       "-filter_complex", "[0:v:0]setpts=(PTS-STARTPTS)*" + scale.toFixed(8) + ",tpad=stop_mode=clone:stop_duration=1,trim=duration=" + audioDuration.toFixed(3) + ",setpts=PTS-STARTPTS[vout]",
       "-map", "[vout]", "-map", "1:a:0", "-map", "2:0", "-t", audioDuration.toFixed(3),
       "-c:v", "libx264", "-preset", "ultrafast", "-crf", "28", "-threads", "1", "-pix_fmt", "yuv420p",
+      "-af", "volume=" + audioVolume.toFixed(2),
       "-c:a", "aac", "-b:a", "128k", "-c:s", "mov_text", "-max_muxing_queue_size", "512",
       "-map_metadata", "0", "-movflags", "+faststart", outputPath
     ];
-    console.log("LOW-MEMORY FINAL RENDER:", { sourceDuration, audioDuration, scale, sceneCount: scenePlan.length });
+    console.log("LOW-MEMORY FINAL RENDER:", { sourceDuration, audioDuration, scale, audioVolume, sceneCount: scenePlan.length });
     await runFFmpeg(args);
 
     const stat = fs.statSync(outputPath);
