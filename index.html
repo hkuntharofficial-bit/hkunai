@@ -1941,7 +1941,7 @@ await window.generateMyanmarVoice(scriptResult.script);
       }
       stages[4].textContent = "✓ " + planResult.scenes.length + " matching scenes planned";
       stages[4].className = "stage-status done";
-      setProgress(86,"ကိုက်ညီတဲ့ ဇာတ်ဝင်ခန်း " + planResult.scenes.length + " ခု ရရှိပါပြီ — MP4 တည်းဖြတ်နေပါသည်...");
+      setProgress(86,"ကိုက်ညီတဲ့ ဇာတ်ဝင်ခန်း " + planResult.scenes.length + " ခုကို အစဉ်လိုက်ပေါင်းပြီး MP4 ထုတ်နေပါသည်...");
       await window.renderFinalVideo(result.key, planResult.scenes, narrationDuration);
        
 stages[2].textContent =
