@@ -247,6 +247,15 @@ accept="video/*,.mp4,.mov,.mkv"
 </div>
 
 <div class="field">
+<label for="voiceStyle">🗣️ အသံပုံစံ (ကလေး / လူကြီး)</label>
+<select id="voiceStyle">
+  <option value="child">ကလေးအသံ — ပိုမြင့်ပြီး နူးညံ့</option>
+  <option value="adult" selected>လူကြီးအသံ — ပုံမှန်</option>
+  <option value="deep">လူကြီးအသံ — ပိုနိမ့်</option>
+</select>
+<p class="hint">အသံပုံစံကို ရွေးပြီးမှ Myanmar Voice ထုတ်ပါ။</p>
+</div>
+<div class="field">
 <label for="voiceSpeed">Voice Speed: <span id="voiceSpeedText" class="speed">1.30×</span></label>
 <input id="voiceSpeed" type="range" min=".8" max="1.4" step=".05" value="1.3">
 </div>
@@ -1543,7 +1552,8 @@ async function generateMyanmarVoice(scriptText) {
       body: JSON.stringify({
         text: chunks[i],
         voice: document.getElementById("voice").value,
-        speed: Number(voiceSpeed.value || 1)
+        speed: Number(voiceSpeed.value || 1),
+        voiceStyle: document.getElementById("voiceStyle").value
       })
     });
 
