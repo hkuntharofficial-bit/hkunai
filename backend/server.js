@@ -35,6 +35,11 @@ const {
 
 const app = express();
 
+app.get("/api/health", (req, res) => {
+  res.set("Cache-Control", "no-store");
+  res.status(200).json({ ok: true, service: "hkunai-backend", uptimeSeconds: Math.round(process.uptime()) });
+});
+
 const PORT =
   process.env.PORT || 3000;
 
@@ -2197,7 +2202,26 @@ app.post("/api/render-video", renderUpload.single("audio"), async (req, res) => 
       filters.push(labels.join("") + "concat=n=" + scenePlan.length + ":v=1:a=0,tpad=stop_mode=clone:stop_duration=" + audioDuration.toFixed(3) + ",trim=duration=" + audioDuration.toFixed(3) + ",setpts=PTS-STARTPTS[vout]");
       args.push("-filter_complex", filters.join(";"), "-map", "[vout]", "-map", audioIndex + ":a:0", "-map", subtitleIndex + ":0", "-t", audioDuration.toFixed(3), "-c:v", "libx264", "-preset", "ultrafast", "-crf", "23", "-threads", "1", "-pix_fmt", "yuv420p", "-c:a", "aac", "-b:a", "128k", "-c:s", "mov_text", "-max_muxing_queue_size", "2048", "-map_metadata", "0", "-shortest", "-movflags", "+faststart", outputPath);
       console.log("FINAL RENDER MODE: memory-bounded scene montage", scenePlan.length, "scenes", "sourceDuration:", sourceDuration, "audioDuration:", audioDuration);
-      await runFFmpeg(args);
+      try {
+        await runFFmpeg(args);
+      } catch (sceneRenderError) {
+        // Do not fail the whole recap if an individual scene has incompatible timestamps/codecs.
+        // Produce a valid narration MP4 from the original source as a safe fallback.
+        console.error("SCENE MONTAGE FAILED; FALLING BACK TO ORIGINAL VIDEO:", String(sceneRenderError?.message || sceneRenderError).slice(0, 1200));
+        try { fs.rmSync(outputPath, { force: true }); } catch {}
+        const fallbackArgs = [
+          "-hide_banner", "-y", "-loglevel", "warning",
+          "-i", sourcePath, "-i", audioPath,
+          "-f", "srt", "-i", subtitlePath,
+          "-map", "0:v:0", "-map", "1:a:0", "-map", "2:0",
+          "-c:v", "copy", "-c:a", "aac", "-b:a", "128k",
+          "-c:s", "mov_text", "-max_muxing_queue_size", "2048",
+          "-map_metadata", "0", "-shortest", "-movflags", "+faststart",
+          outputPath
+        ];
+        console.warn("FINAL RENDER MODE: safe original-video fallback");
+        await runFFmpeg(fallbackArgs);
+      }
     } else {
     // No valid edit plan: preserve the original video and synchronize narration.
     const renderArgs = [
