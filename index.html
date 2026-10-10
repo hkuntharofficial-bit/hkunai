@@ -84,6 +84,22 @@ margin-top:5px;cursor:pointer
 }
 .start:disabled{opacity:.65}
 .note{text-align:center;color:#777;font-size:11px;line-height:1.6;margin:12px}
+
+.setup-pages{margin-top:8px}
+.setup-page{display:none}
+.setup-page.active-page{display:block}
+.setup-top{display:flex;justify-content:space-between;align-items:center;gap:10px;margin:4px 0 14px}
+.setup-count{font-size:12px;color:#8f9bad}
+.setup-track{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px;margin:12px 0 18px}
+.setup-dot{padding:9px 4px;border:1px solid #2a3040;border-radius:10px;text-align:center;color:#8c95a5;font-size:11px;line-height:1.5;background:#0c0f15}
+.setup-dot b{display:grid;place-items:center;width:25px;height:25px;margin:0 auto 5px;border-radius:50%;background:#252b38;color:#d4d9e2}
+.setup-dot.current{border-color:#ff3b30;color:#fff;background:#251110}
+.setup-dot.current b,.setup-dot.visited b{background:#ff3b30;color:#fff}
+.setup-dot.visited{border-color:#74322e;color:#ffb5b0}
+.setup-nav{display:flex;gap:10px;margin:18px 0}
+.setup-nav button{flex:1;padding:14px 10px;border-radius:12px;border:1px solid #343844;background:#191c24;color:#fff;font-size:14px;font-weight:700;cursor:pointer}
+.setup-nav .next{background:#ff3b30;border-color:#ff3b30}
+.setup-nav button:disabled{opacity:.35}
 .processing{display:none}
 .progressbox{
 height:8px;background:#191c24;border-radius:10px;
@@ -150,6 +166,16 @@ background:#2a1111;color:#ff9999;font-size:12px;line-height:1.6
 </section>
 
 
+<!-- SETUP WIZARD -->
+<div class="setup-track" id="setupTrack" aria-label="Setup pages">
+  <div class="setup-dot current" data-setup-dot="0"><b>1</b>Video + Voice</div>
+  <div class="setup-dot" data-setup-dot="1"><b>2</b>Style + Video</div>
+  <div class="setup-dot" data-setup-dot="2"><b>3</b>Logo + Removal</div>
+  <div class="setup-dot" data-setup-dot="3"><b>4</b>Subtitle</div>
+</div>
+<div class="setup-top"><strong id="setupPageTitle">အဆင့် 1 — Video Upload နဲ့ Myanmar Voice</strong><span class="setup-count" id="setupPageCount">1 / 4</span></div>
+
+<section class="setup-page active-page" data-setup-page="0">
 <!-- VIDEO -->
 
 <div class="card">
@@ -228,6 +254,10 @@ value="1"
 </div>
 
 
+</section>
+<div class="setup-nav"><button type="button" disabled>← နောက်သို့</button><button type="button" class="next" data-setup-next="1">ရှေ့ဆက် →</button></div>
+
+<section class="setup-page" data-setup-page="1">
 <!-- STYLE -->
 
 <div class="card">
@@ -328,6 +358,10 @@ Original Video Speed:
 </div>
 
 
+</section>
+<div class="setup-nav"><button type="button" data-setup-back="0">← နောက်သို့</button><button type="button" class="next" data-setup-next="2">ရှေ့ဆက် →</button></div>
+
+<section class="setup-page" data-setup-page="2">
 <!-- LOGO -->
 
 <div class="card">
@@ -467,6 +501,10 @@ checked
 </div>
 
 
+</section>
+<div class="setup-nav"><button type="button" data-setup-back="1">← နောက်သို့</button><button type="button" class="next" data-setup-next="3">ရှေ့ဆက် →</button></div>
+
+<section class="setup-page" data-setup-page="3">
 <!-- SUBTITLE -->
 
 <div class="card">
@@ -560,6 +598,9 @@ Audio Timeline ကို Master Timeline အဖြစ် အသုံးပြ�
 
 </div>
 
+
+</section>
+<div class="setup-nav"><button type="button" data-setup-back="2">← နောက်သို့</button></div>
 
 <!-- PROCESSING -->
 
@@ -767,6 +808,47 @@ document.getElementById(
 "logoPreview"
 );
 
+
+
+/* =====================================
+   FOUR-PAGE SETUP WIZARD
+===================================== */
+const setupTitles = [
+  "အဆင့် 1 — Video Upload နဲ့ Myanmar Voice",
+  "အဆင့် 2 — Recap Style နဲ့ Video Settings",
+  "အဆင့် 3 — Logo Upload နဲ့ Original Text / Object Removal",
+  "အဆင့် 4 — Myanmar Subtitle"
+];
+let currentSetupPage = 0;
+function showSetupPage(page) {
+  const target = Math.max(0, Math.min(3, Number(page) || 0));
+  currentSetupPage = target;
+  document.querySelectorAll("[data-setup-page]").forEach((el, i) => {
+    el.classList.toggle("active-page", i === target);
+  });
+  document.querySelectorAll("[data-setup-dot]").forEach((el, i) => {
+    el.classList.toggle("current", i === target);
+    el.classList.toggle("visited", i < target);
+  });
+  const title = document.getElementById("setupPageTitle");
+  const count = document.getElementById("setupPageCount");
+  if (title) title.textContent = setupTitles[target];
+  if (count) count.textContent = (target + 1) + " / 4";
+  document.getElementById("setupTrack")?.scrollIntoView({behavior:"smooth", block:"start"});
+}
+document.querySelectorAll("[data-setup-next]").forEach(button => {
+  button.addEventListener("click", () => {
+    if (Number(button.dataset.setupNext) === 1 && !videoInput.files[0]) {
+      alert("ရှေ့ဆက်မီ Movie Video တစ်ခု ရွေးပါ။");
+      showSetupPage(0);
+      return;
+    }
+    showSetupPage(button.dataset.setupNext);
+  });
+});
+document.querySelectorAll("[data-setup-back]").forEach(button => {
+  button.addEventListener("click", () => showSetupPage(button.dataset.setupBack));
+});
 
 /* =====================================
    FILE PICKER
@@ -1621,6 +1703,11 @@ startButton.addEventListener(
     }
 
 
+    // START AUTO RECAP opens the production progress view.
+    document.querySelectorAll("[data-setup-page]").forEach(el => el.classList.remove("active-page"));
+    document.getElementById("setupTrack").style.display = "none";
+    document.querySelector(".setup-top").style.display = "none";
+    document.querySelectorAll(".setup-nav").forEach(el => el.style.display = "none");
     processing.style.display =
       "block";
 
@@ -1866,7 +1953,6 @@ console.log(
 
       startButton.textContent =
         "🚀 START AUTO RECAP";
-
 
       alert(
         "❌ Auto Recap မအောင်မြင်ပါ\n\n" +
