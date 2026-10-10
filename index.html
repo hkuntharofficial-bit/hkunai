@@ -630,6 +630,16 @@ style="text-align:center;color:#aaa;font-size:13px"
   </a>
   <p id="voiceMessage" style="margin-top:10px;color:#aaa;font-size:12px"></p>
 </div>
+
+<div id="finalVideoOutput" class="card" style="display:none">
+  <div class="title">🎬 HKUN AI Final Recap MP4</div>
+  <video id="finalVideoPlayer" controls playsinline style="width:100%;max-height:420px;border-radius:12px;background:#000"></video>
+  <a id="finalVideoDownload" href="#" download="hkun-ai-recap.mp4"
+     style="display:block;margin-top:12px;padding:16px;background:#18a058;color:white;text-align:center;border-radius:10px;text-decoration:none;font-weight:bold">
+    ⬇️ Final MP4 ဒေါင်းလုဒ်လုပ်ရန်
+  </a>
+  <p id="finalVideoMessage" style="margin-top:10px;color:#aaa;font-size:12px"></p>
+</div>
    
 </main>
 
@@ -1400,6 +1410,7 @@ async function generateMyanmarVoice(scriptText) {
   const audioBlob = new Blob(audioParts, {
     type: "audio/mpeg"
   });
+  window.hkunVoiceBlob = audioBlob;
 
   if (hkunVoiceObjectUrl) {
     URL.revokeObjectURL(hkunVoiceObjectUrl);
@@ -1446,6 +1457,7 @@ async function generateMyanmarVoice(scriptText) {
       return (index + 1) + "\n" + srtTimestamp(start) + " --> " +
         srtTimestamp(end) + "\n" + sentence + "\n";
     }).join("\n");
+    window.hkunSubtitleText = srt;
     const blob = new Blob(["\uFEFF" + srt], { type: "text/plain;charset=utf-8" });
     const link = document.getElementById("subtitleDownload");
     if (window.hkunSubtitleObjectUrl) URL.revokeObjectURL(window.hkunSubtitleObjectUrl);
@@ -1471,6 +1483,48 @@ function srtTimestamp(seconds) {
   const ss = String(Math.floor((ms % 60000) / 1000)).padStart(2, "0");
   const mmm = String(ms % 1000).padStart(3, "0");
   return `${hh}:${mm}:${ss},${mmm}`;
+}
+
+async function renderFinalVideo(videoKey) {
+  const audioBlob = window.hkunVoiceBlob;
+  const subtitleText = window.hkunSubtitleText;
+  if (!audioBlob || !subtitleText) {
+    throw new Error("MP4 ထုတ်ရန် အသံဖိုင် သို့မဟုတ် စာတန်းထိုး မပြည့်စုံပါ။ ထပ်ကြိုးစားပါ။");
+  }
+  stages[4].textContent = "✓ Source video selected";
+  stages[4].className = "stage-status done";
+  stages[5].textContent = "Syncing Myanmar narration to video...";
+  stages[5].className = "stage-status active";
+  stages[6].textContent = "✓ Myanmar SRT subtitles ready";
+  stages[6].className = "stage-status done";
+  stages[7].textContent = "Rendering final MP4...";
+  stages[7].className = "stage-status active";
+
+  const form = new FormData();
+  form.append("key", videoKey);
+  form.append("subtitle", subtitleText);
+  form.append("audio", audioBlob, "hkun-myanmar-voice.mp3");
+  document.getElementById("finalVideoMessage").textContent =
+    "ဗီဒီယို၊ မြန်မာအသံနှင့် စာတန်းထိုးကို ပေါင်းစည်းနေပါသည်။ မပိတ်ဘဲ စောင့်ပေးပါ။";
+
+  const response = await fetch(BACKEND + "/api/render-video", { method: "POST", body: form });
+  const result = await readJSON(response);
+  if (!result.ok || !result.downloadUrl) {
+    throw new Error(result.message || result.error || "Final MP4 ထုတ်လုပ်မရပါ။");
+  }
+  document.getElementById("finalVideoPlayer").src = result.downloadUrl;
+  document.getElementById("finalVideoDownload").href = result.downloadUrl;
+  const output = document.getElementById("finalVideoOutput");
+  output.style.display = "block";
+  output.scrollIntoView({ behavior: "smooth", block: "center" });
+  stages[5].textContent = "✓ Narration synchronized";
+  stages[5].className = "stage-status done";
+  stages[7].textContent = "✓ Final MP4 completed";
+  stages[7].className = "stage-status done";
+  document.getElementById("finalVideoMessage").textContent =
+    "MP4 အရွယ်အစား " + (result.sizeBytes / (1024 * 1024)).toFixed(1) +
+    " MB။ Download link သည် ၂၄ နာရီအတွင်း သက်တမ်းရှိပါသည်။";
+  return result;
 }
 
 window.generateMyanmarVoice = generateMyanmarVoice;
@@ -1654,6 +1708,8 @@ window.hkunRecapScript =
   scriptResult.script;
        
 await window.generateMyanmarVoice(scriptResult.script);
+
+      await renderFinalVideo(result.key);
        
 stages[2].textContent =
   "✓ Myanmar recap script completed";
