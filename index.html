@@ -96,16 +96,16 @@ margin-top:5px;cursor:pointer
 .setup-dot.current{border-color:#ff3b30;color:#fff;background:#251110}
 .setup-dot.current b,.setup-dot.visited b{background:#ff3b30;color:#fff}
 .setup-dot.visited{border-color:#74322e;color:#ffb5b0}
-.setup-nav{display:flex;gap:10px;margin:18px 0}
+.setup-nav{display:none;gap:10px;margin:18px 0}
 .setup-nav button{flex:1;padding:14px 10px;border-radius:12px;border:1px solid #343844;background:#191c24;color:#fff;font-size:14px;font-weight:700;cursor:pointer}
 .setup-nav .next{background:#ff3b30;border-color:#ff3b30}
 .setup-nav button:disabled{opacity:.35}
 .setup-nav .back{background:#191c24;border-color:#343844}
 .setup-nav .back[hidden]{display:none!important}
 /* Keep exactly one navigation control per setup page */
-.setup-nav{display:flex;gap:10px;margin:18px 0}
+.setup-nav{display:none;gap:10px;margin:18px 0}
 .setup-nav button{width:100%;flex:1}
-.setup-nav .back{display:none!important}
+.setup-nav .back{display:block!important}
 .processing{display:none}
 .progressbox{
 height:8px;background:#191c24;border-radius:10px;
@@ -861,9 +861,10 @@ document.querySelectorAll("[data-setup-back]").forEach(button => {
 });
 // Keep exactly one Back and one Next control at the bottom of each setup step.
 document.querySelectorAll(".setup-nav").forEach((nav, index) => {
+  nav.style.display = index === currentSetupPage ? "flex" : "none";
   nav.querySelectorAll("button").forEach(button => {
     if (button.hasAttribute("data-setup-back")) {
-      button.style.display = index === 0 ? "none" : "";
+      button.style.display = index === 0 ? "none" : "block";
     }
   });
 });
