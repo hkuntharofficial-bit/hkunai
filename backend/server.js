@@ -2267,7 +2267,7 @@ app.post("/api/tts", async (req, res) => {
   let tempDir;
 
   try {
-    const { text, voice, speed } = req.body || {};
+    const { text, voice, speed, voiceStyle } = req.body || {};
     if (typeof text !== "string" || !text.trim()) {
       return res.status(400).json({ ok: false, error: "Myanmar text is required" });
     }
@@ -2302,6 +2302,22 @@ app.post("/api/tts", async (req, res) => {
         const stat = fs.statSync(audioPath);
         if (!stat.isFile() || stat.size < 100) {
           throw new Error("TTS returned an empty or invalid audio file");
+        }
+        const style = ["child", "adult", "deep"].includes(voiceStyle) ? voiceStyle : "adult";
+        const pitchFactor = style === "child" ? 1.18 : style === "deep" ? 0.88 : 1;
+        if (pitchFactor !== 1) {
+          const pitchedPath = path.join(tempDir, "speech-pitched.mp3");
+          const pitchResult = spawnSync("ffmpeg", [
+            "-y", "-hide_banner", "-loglevel", "error",
+            "-i", audioPath,
+            "-af", `asetrate=24000*${pitchFactor},aresample=24000,atempo=${(1 / pitchFactor).toFixed(5)}`,
+            "-codec:a", "libmp3lame", "-b:a", "48k",
+            pitchedPath
+          ], { encoding: "utf8", timeout: 90000, maxBuffer: 2 * 1024 * 1024 });
+          if (pitchResult.error || pitchResult.status !== 0 || !fs.existsSync(pitchedPath) || fs.statSync(pitchedPath).size < 100) {
+            throw new Error("Voice style audio processing failed: " + (pitchResult.error?.message || pitchResult.stderr || pitchResult.status));
+          }
+          fs.renameSync(pitchedPath, audioPath);
         }
         lastError = null;
         break;
