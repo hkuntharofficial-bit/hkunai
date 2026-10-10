@@ -1509,7 +1509,7 @@ async function analyzeVideo(videoKey, mimeType, recapStyle) {
 
 let hkunVoiceObjectUrl = null;
 
-function splitTextForTTS(text, maxLength = 16000) {
+function splitTextForTTS(text, maxLength = 4500) {
   const chunks = [];
   let remaining = String(text || "").trim();
 
@@ -1560,14 +1560,25 @@ async function generateMyanmarVoice(scriptText) {
       const i = nextChunk++;
       if (i >= chunks.length) return;
       stages[3].textContent = `မြန်မာအသံ ထုတ်နေသည် ${completedChunks}/${chunks.length} (တစ်ချိန်တည်း ${concurrency} ပိုင်း)`;
-      const response = await fetch(BACKEND + "/api/tts", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text: chunks[i], voice: voiceName, speed: speedValue, voicePitch: pitchValue })
-      });
-      if (!response.ok) {
-        const message = await response.text();
-        throw new Error(`အသံအပိုင်း ${i + 1}/${chunks.length} မအောင်မြင်ပါ: ${message.slice(0, 250)}`);
+      let response;
+      let lastError = "";
+      for (let attempt = 1; attempt <= 3; attempt++) {
+        try {
+          response = await fetch(BACKEND + "/api/tts", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ text: chunks[i], voice: voiceName, speed: speedValue, voicePitch: pitchValue })
+          });
+          if (response.ok) break;
+          lastError = (await response.text()).slice(0, 250);
+          if (response.status < 500 && response.status !== 429) break;
+        } catch (error) {
+          lastError = String(error?.message || error);
+        }
+        if (attempt < 3) await new Promise(resolve => setTimeout(resolve, attempt * 1200));
+      }
+      if (!response || !response.ok) {
+        throw new Error(`အသံအပိုင်း ${i + 1}/${chunks.length} မအောင်မြင်ပါ (HTTP ${response?.status || "network"}): ${lastError || "Backend သို့ ချိတ်ဆက်မရပါ"}`);
       }
       const audio = await response.arrayBuffer();
       if (!audio.byteLength) throw new Error(`အသံအပိုင်း ${i + 1} အလွတ်ဖြစ်နေပါသည်။`);
