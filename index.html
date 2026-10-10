@@ -98,6 +98,8 @@ margin-top:5px;cursor:pointer
 .setup-dot.visited{border-color:#74322e;color:#ffb5b0}
 .setup-nav{display:none!important;gap:10px;margin:18px 0}
 .setup-nav.active-nav{display:flex!important}
+.pitch-control-row{display:flex;align-items:center;gap:10px;font-size:12px;color:#aeb4c2}
+.pitch-control-row input{flex:1;min-width:0}
 .volume-control-row{display:flex;align-items:center;gap:12px}
 .volume-control-row input{flex:1;min-width:0}
 .volume-presets{display:flex;gap:8px;margin-top:10px}
@@ -112,7 +114,8 @@ margin-top:5px;cursor:pointer
 /* Keep exactly one navigation control per setup page */
 .setup-nav{display:none;gap:10px;margin:18px 0}
 .setup-nav button{width:100%;flex:1}
-.setup-nav .back{display:block!important}
+.setup-nav .back{display:block}
+.setup-nav .back[hidden]{display:none!important}
 .processing{display:none}
 .progressbox{
 height:8px;background:#191c24;border-radius:10px;
@@ -247,13 +250,13 @@ accept="video/*,.mp4,.mov,.mkv"
 </div>
 
 <div class="field">
-<label for="voiceStyle">🗣️ အသံပုံစံ (ကလေး / လူကြီး)</label>
-<select id="voiceStyle">
-  <option value="child">ကလေးအသံ — ပိုမြင့်ပြီး နူးညံ့</option>
-  <option value="adult" selected>လူကြီးအသံ — ပုံမှန်</option>
-  <option value="deep">လူကြီးအသံ — ပိုနိမ့်</option>
-</select>
-<p class="hint">အသံပုံစံကို ရွေးပြီးမှ Myanmar Voice ထုတ်ပါ။</p>
+<label for="voicePitch">🗣️ အသံအသက်အရွယ် ချိန်ညှိမှု: <span id="voicePitchText" class="speed">လူကြီး / ပုံမှန်</span></label>
+<div class="pitch-control-row">
+<span>လူကြီးအသံ</span>
+<input id="voicePitch" type="range" min="0.85" max="1.20" step="0.01" value="1" aria-label="Voice age and pitch">
+<span>လူငယ်/ကလေးသံ</span>
+</div>
+<p class="hint">Slider ကို ဘယ်ဘက်ရွှေ့လျှင် အသံနိမ့်၊ ညာဘက်ရွှေ့လျှင် အသံမြင့်လာမည်။ လူကြီးနှင့် လူငယ်အသံကို ကိုယ်တိုင်ချိန်နိုင်သည်။</p>
 </div>
 <div class="field">
 <label for="voiceSpeed">Voice Speed: <span id="voiceSpeedText" class="speed">1.30×</span></label>
@@ -858,6 +861,8 @@ function showSetupPage(page) {
   // Show only the navigation row belonging to the current page.
   document.querySelectorAll(".setup-nav").forEach((el, i) => {
     el.classList.toggle("active-nav", i === target);
+    const back = el.querySelector("[data-setup-back]");
+    if (back) back.hidden = target === 0;
   });
   const title = document.getElementById("setupPageTitle");
   const count = document.getElementById("setupPageCount");
@@ -883,7 +888,7 @@ document.querySelectorAll(".setup-nav").forEach((nav, index) => {
   nav.classList.toggle("active-nav", index === currentSetupPage);
   nav.querySelectorAll("button").forEach(button => {
     if (button.hasAttribute("data-setup-back")) {
-      button.style.display = index === 0 ? "none" : "block";
+      button.hidden = index === 0;
     }
   });
 });
@@ -1080,6 +1085,14 @@ bytes(file.size)+
 voiceSpeed.addEventListener("input", function() {
   voiceSpeedText.textContent = Number(this.value).toFixed(2) + "×";
 });
+const voicePitch = document.getElementById("voicePitch");
+const voicePitchText = document.getElementById("voicePitchText");
+function updateVoicePitch() {
+  const value = Number(voicePitch.value);
+  voicePitchText.textContent = value < 0.97 ? "လူကြီးအသံ — နိမ့်" : value > 1.04 ? "လူငယ်/ကလေးဆန်သော အသံ — မြင့်" : "လူကြီး / ပုံမှန်";
+}
+voicePitch.addEventListener("input", updateVoicePitch);
+updateVoicePitch();
 function updateVoiceVolume(value) {
   const normalized = Math.max(0.5, Math.min(1.5, Number(value) || 1));
   voiceVolume.value = String(normalized);
@@ -1553,7 +1566,7 @@ async function generateMyanmarVoice(scriptText) {
         text: chunks[i],
         voice: document.getElementById("voice").value,
         speed: Number(voiceSpeed.value || 1),
-        voiceStyle: document.getElementById("voiceStyle").value
+        voicePitch: Number(document.getElementById("voicePitch").value || 1)
       })
     });
 
