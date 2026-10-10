@@ -623,6 +623,11 @@ style="text-align:center;color:#aaa;font-size:13px"
      style="display:block;margin-top:12px;padding:14px;background:#ff3b30;color:white;text-align:center;border-radius:10px;text-decoration:none;font-weight:bold">
     ⬇️ MP3 ဒေါင်းလုဒ်လုပ်ရန်
   </a>
+  <a id="subtitleDownload"
+     download="hkun-myanmar-subtitles.srt"
+     style="display:none;margin-top:10px;padding:14px;background:#277a49;color:white;text-align:center;border-radius:10px;text-decoration:none;font-weight:bold">
+    💬 မြန်မာစာတန်းထိုး SRT ဒေါင်းလုဒ်လုပ်ရန်
+  </a>
   <p id="voiceMessage" style="margin-top:10px;color:#aaa;font-size:12px"></p>
 </div>
    
@@ -1411,12 +1416,61 @@ async function generateMyanmarVoice(scriptText) {
   document.getElementById("voiceOutput").style.display =
     "block";
 
+  stages[3].textContent = "✓ Myanmar Voice completed";
+  stages[3].className = "stage-status done";
+
+  // Estimate subtitle timings over the actual narration duration.
+  const audioElement = document.getElementById("voiceAudio");
+  const duration = await new Promise((resolve) => {
+    if (Number.isFinite(audioElement.duration) && audioElement.duration > 0) {
+      resolve(audioElement.duration);
+      return;
+    }
+    const timer = setTimeout(() => resolve(0), 8000);
+    audioElement.addEventListener("loadedmetadata", () => {
+      clearTimeout(timer);
+      resolve(Number.isFinite(audioElement.duration) ? audioElement.duration : 0);
+    }, { once: true });
+  });
+
+  const sentences = String(scriptText).replace(/\r/g, "")
+    .split(/(?<=[။.!?])\s+|\n+/).map(s => s.trim()).filter(Boolean);
+
+  if (sentences.length && duration > 0) {
+    const totalWeight = sentences.reduce((sum, s) => sum + Math.max(1, s.length), 0);
+    let elapsed = 0;
+    const srt = sentences.map((sentence, index) => {
+      const start = elapsed;
+      elapsed += duration * Math.max(1, sentence.length) / totalWeight;
+      const end = index === sentences.length - 1 ? duration : elapsed;
+      return (index + 1) + "\\n" + srtTimestamp(start) + " --> " +
+        srtTimestamp(end) + "\\n" + sentence + "\\n";
+    }).join("\\n");
+    const blob = new Blob(["\\uFEFF" + srt], { type: "text/plain;charset=utf-8" });
+    const link = document.getElementById("subtitleDownload");
+    if (window.hkunSubtitleObjectUrl) URL.revokeObjectURL(window.hkunSubtitleObjectUrl);
+    window.hkunSubtitleObjectUrl = URL.createObjectURL(blob);
+    link.href = window.hkunSubtitleObjectUrl;
+    link.style.display = "block";
+    stages[6].textContent = "✓ SRT subtitle created (estimated timing)";
+    stages[6].className = "stage-status done";
+  } else {
+    stages[6].textContent = "Subtitle timing unavailable";
+    stages[6].className = "stage-status active";
+  }
+
   document.getElementById("voiceMessage").textContent =
     `စာသား ${String(scriptText).length.toLocaleString()} လုံး၊ ` +
-    `အသံအပိုင်း ${chunks.length} ပိုင်း ထုတ်ပြီးပါပြီ။`;
+    `အသံအပိုင်း ${chunks.length} ပိုင်း ထုတ်ပြီးပါပြီ။ စာတန်းထိုးအချိန်သည် ခန့်မှန်းတန်ဖိုးဖြစ်ပါသည်။`;
+}
 
-stages[3].textContent = "✓ Myanmar Voice completed";
-stages[3].className = "stage-status done";
+function srtTimestamp(seconds) {
+  const ms = Math.max(0, Math.round(seconds * 1000));
+  const hh = String(Math.floor(ms / 3600000)).padStart(2, "0");
+  const mm = String(Math.floor((ms % 3600000) / 60000)).padStart(2, "0");
+  const ss = String(Math.floor((ms % 60000) / 1000)).padStart(2, "0");
+  const mmm = String(ms % 1000).padStart(3, "0");
+  return `${hh}:${mm}:${ss},${mmm}`;
 }
 
 window.generateMyanmarVoice = generateMyanmarVoice;
