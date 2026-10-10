@@ -1509,7 +1509,7 @@ async function analyzeVideo(videoKey, mimeType, recapStyle) {
 
 let hkunVoiceObjectUrl = null;
 
-function splitTextForTTS(text, maxLength = 1600) {
+function splitTextForTTS(text, maxLength = 4500) {
   const chunks = [];
   let remaining = String(text || "").trim();
 
@@ -1544,30 +1544,39 @@ async function generateMyanmarVoice(scriptText) {
   stages[3].textContent = "မြန်မာအသံ ထုတ်နေသည်...";
   stages[3].className = "stage-status active";
 
-  for (let i = 0; i < chunks.length; i++) {
-    stages[3].textContent =
-      `အသံထုတ်နေသည် ${i + 1}/${chunks.length}`;
-
-    const response = await fetch(BACKEND + "/api/tts", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        text: chunks[i],
-        voice: document.getElementById("voice").value,
-        speed: Number(voiceSpeed.value || 1),
-        voicePitch: Number(document.getElementById("voicePitch").value || 1)
-      })
-    });
-
-    if (!response.ok) {
-      const message = await response.text();
-      throw new Error(
-        `အသံအပိုင်း ${i + 1} မအောင်မြင်ပါ: ${message.slice(0, 200)}`
-      );
-    }
-
-    audioParts.push(await response.arrayBuffer());
+  if (chunks.length > 100) {
+    throw new Error("Recap အသံအပိုင်း " + chunks.length + " ပိုင်းရှိနေပါသည်။ လုံခြုံစွာထုတ်လုပ်ရန် Script ကို အပိုင်းခွဲပြီး ထုတ်ပါ။");
   }
+  // Run a small worker pool concurrently; keep results indexed so narration
+  // always plays in the original script order.
+  const concurrency = Math.min(3, chunks.length);
+  let nextChunk = 0;
+  let completedChunks = 0;
+  const voiceName = document.getElementById("voice").value;
+  const speedValue = Number(voiceSpeed.value || 1);
+  const pitchValue = Number(document.getElementById("voicePitch").value || 1);
+  const worker = async () => {
+    while (true) {
+      const i = nextChunk++;
+      if (i >= chunks.length) return;
+      stages[3].textContent = `မြန်မာအသံ ထုတ်နေသည် ${completedChunks}/${chunks.length} (တစ်ချိန်တည်း ${concurrency} ပိုင်း)`;
+      const response = await fetch(BACKEND + "/api/tts", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text: chunks[i], voice: voiceName, speed: speedValue, voicePitch: pitchValue })
+      });
+      if (!response.ok) {
+        const message = await response.text();
+        throw new Error(`အသံအပိုင်း ${i + 1}/${chunks.length} မအောင်မြင်ပါ: ${message.slice(0, 250)}`);
+      }
+      const audio = await response.arrayBuffer();
+      if (!audio.byteLength) throw new Error(`အသံအပိုင်း ${i + 1} အလွတ်ဖြစ်နေပါသည်။`);
+      audioParts[i] = audio;
+      completedChunks++;
+      stages[3].textContent = `မြန်မာအသံ ထုတ်ပြီး ${completedChunks}/${chunks.length} ပိုင်း`;
+    }
+  };
+  await Promise.all(Array.from({ length: concurrency }, () => worker()));
 
   // Merge individual MP3s server-side; raw byte concatenation repeats MP3 headers.
   stages[3].textContent = "အသံအပိုင်းများကို ပေါင်းစည်းနေသည်...";
