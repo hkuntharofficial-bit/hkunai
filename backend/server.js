@@ -1558,6 +1558,129 @@ Do not assume information that is not visible or supported by the video.
 );
 
 
+
+/* =========================================================
+   CHUNKED VIDEO ANALYSIS
+   Split long source videos into 10–45 second pieces, analyze
+   each piece independently, then return ordered summaries.
+========================================================= */
+app.post("/api/analyze-video-chunks", async (req, res) => {
+  const body = req.body || {};
+  const key = String(body.key || "");
+  const mimeType = String(body.mimeType || "video/mp4");
+  const recapStyle = String(body.recapStyle || "Movie Recap");
+  const localVideo = path.join(TEMP_DIR, "chunk-source-" + crypto.randomUUID() + ".mp4");
+  const workDir = path.join(TEMP_DIR, "chunk-work-" + crypto.randomUUID());
+  const temporaryFiles = [localVideo];
+
+  try {
+    if (!GEMINI) return res.status(503).json({ ok: false, error: "GEMINI_API_KEY is not configured" });
+    if (!key.startsWith("uploads/")) return res.status(400).json({ ok: false, error: "A valid uploaded video key is required" });
+
+    fs.mkdirSync(workDir, { recursive: true });
+    await downloadR2Object(key, localVideo);
+    const probe = spawnSync(ffmpegPath, ["-hide_banner", "-i", localVideo], { encoding: "utf8", timeout: 30000, maxBuffer: 2 * 1024 * 1024 });
+    const probeText = String(probe.stderr || "") + "\n" + String(probe.stdout || "");
+    const match = probeText.match(/Duration:\s*(\d+):(\d+):(\d+(?:\.\d+)?)/i);
+    const duration = match ? Number(match[1]) * 3600 + Number(match[2]) * 60 + Number(match[3]) : NaN;
+    if (!Number.isFinite(duration) || duration <= 0) throw new Error("မူရင်းဗီဒီယိုကြာချိန်ကို မဖတ်နိုင်ပါ။");
+
+    // Aim for 45-second chunks, evenly distribute the tail so chunks
+    // are normally between 10 and 45 seconds rather than leaving a tiny tail.
+    const chunkCount = Math.max(1, Math.ceil(duration / 45));
+    const chunkDuration = duration / chunkCount;
+    const segments = [];
+
+    for (let i = 0; i < chunkCount; i++) {
+      const start = i * chunkDuration;
+      const length = Math.min(chunkDuration, duration - start);
+      const chunkPath = path.join(workDir, "segment-" + String(i + 1).padStart(5, "0") + ".mp4");
+      temporaryFiles.push(chunkPath);
+      const splitArgs = [
+        "-hide_banner", "-y", "-loglevel", "error",
+        "-ss", start.toFixed(3), "-i", localVideo, "-t", length.toFixed(3),
+        "-map", "0:v:0", "-map", "0:a?",
+        "-c:v", "libx264", "-preset", "ultrafast", "-crf", "28", "-threads", "1",
+        "-pix_fmt", "yuv420p", "-c:a", "aac", "-b:a", "96k", "-movflags", "+faststart",
+        chunkPath
+      ];
+      await runFFmpeg(splitArgs);
+      if (!fs.existsSync(chunkPath) || fs.statSync(chunkPath).size < 1024) {
+        throw new Error("ဗီဒီယိုအပိုင်း " + (i + 1) + " ကို ခွဲထုတ်မရပါ။");
+      }
+
+      let videoFile = await GEMINI.files.upload({
+        file: chunkPath,
+        config: { mimeType: "video/mp4" }
+      });
+      videoFile = await waitForGeminiFile(videoFile);
+      const prompt = [
+        "You are HKUN AI, analyzing one chronological segment of a movie for Myanmar recap.",
+        "This is source segment " + (i + 1) + " of " + chunkCount + ".",
+        "Its source-video time range is " + start.toFixed(2) + " to " + (start + length).toFixed(2) + " seconds.",
+        "Recap style: " + recapStyle,
+        "Analyze only visible events in this segment. Do not invent characters, events, relationships, or dialogue.",
+        "Summarize the actual events in chronological order, important characters and visuals, and why each event matters.",
+        "Use absolute source-video timestamps by adding " + start.toFixed(2) + " seconds to timestamps within this segment.",
+        "Mention continuity with the previous segment only if the footage supports it. Return a concise, detailed recap analysis suitable for generating a Myanmar narration."
+      ].join("\n\n");
+
+      let analysisResponse;
+      try {
+        analysisResponse = await GEMINI.models.generateContent({
+          model: GEMINI_MODEL,
+          contents: [{ role: "user", parts: [
+            { fileData: { fileUri: videoFile.uri, mimeType: videoFile.mimeType || "video/mp4" } },
+            { text: prompt }
+          ] }]
+        });
+      } catch (primaryError) {
+        if (GEMINI_MODEL === "gemini-2.5-flash") throw primaryError;
+        analysisResponse = await GEMINI.models.generateContent({
+          model: "gemini-2.5-flash",
+          contents: [{ role: "user", parts: [
+            { fileData: { fileUri: videoFile.uri, mimeType: videoFile.mimeType || "video/mp4" } },
+            { text: prompt }
+          ] }]
+        });
+      }
+
+      const analysis = String(analysisResponse.text || "").trim();
+      if (!analysis) throw new Error("ဗီဒီယိုအပိုင်း " + (i + 1) + " အတွက် AI analysis မရရှိပါ။");
+      segments.push({
+        index: i + 1,
+        start: Number(start.toFixed(3)),
+        end: Number((start + length).toFixed(3)),
+        duration: Number(length.toFixed(3)),
+        analysis
+      });
+      console.log("CHUNK ANALYZED:", i + 1, "/", chunkCount, "source seconds", start, "-", start + length);
+      // Release the local chunk immediately; retain only its textual recap.
+      removeTempFile(chunkPath);
+    }
+
+    return res.json({
+      ok: true,
+      key,
+      sourceDuration: Number(duration.toFixed(3)),
+      chunkDuration: Number(chunkDuration.toFixed(3)),
+      segments,
+      analysis: segments.map(s => "[SEGMENT " + s.index + " | " + s.start + "–" + s.end + " sec]\n" + s.analysis).join("\n\n")
+    });
+  } catch (error) {
+    console.error("CHUNKED VIDEO ANALYSIS ERROR:", error?.stack || error);
+    if (!res.headersSent) return res.status(500).json({
+      ok: false,
+      error: "Chunked video analysis failed",
+      message: String(error?.message || error).slice(0, 1000)
+    });
+  } finally {
+    for (const file of temporaryFiles) removeTempFile(file);
+    try { fs.rmSync(workDir, { recursive: true, force: true }); } catch {}
+  }
+});
+
+
 /* =========================================================
    DELETE R2 VIDEO
 ========================================================= */
