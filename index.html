@@ -1722,8 +1722,11 @@ startButton.addEventListener(
         );
 
 
-      window.hkunGeminiAnalysis =
-        analysis;
+      window.hkunGeminiAnalysis = analysis;
+      stages[0].textContent = "✓ Video uploaded";
+      stages[0].className = "stage-status done";
+      stages[1].textContent = "✓ Video analysis completed";
+      stages[1].className = "stage-status done";
       setProgress(50,"ဗီဒီယိုနားလည်မှု ပြီးပါပြီ — မြန်မာ Recap Script ဖန်တီးနေပါသည်...");
 /* STEP 3 — MYANMAR RECAP SCRIPT */
 
@@ -1755,9 +1758,9 @@ const scriptResponse =
 const scriptResult =
   await readJSON(scriptResponse);
 
-window.hkunRecapScript =
-  scriptResult.script;
-       
+window.hkunRecapScript = scriptResult.script;
+stages[2].textContent = "✓ Myanmar recap script completed";
+stages[2].className = "stage-status done";
 setProgress(70,"မြန်မာအသံနှင့် SRT စာတန်းထိုး ထုတ်လုပ်နေပါသည်...");
 await window.generateMyanmarVoice(scriptResult.script);
 
