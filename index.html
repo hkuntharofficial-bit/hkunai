@@ -1517,6 +1517,13 @@ by the actual video.
       }
     );
 
+  const analysisResult = await readJSON(response);
+  if (!analysisResult.ok || !String(analysisResult.analysis || "").trim()) {
+    throw new Error(analysisResult.message || analysisResult.error || "ဗီဒီယိုအပိုင်းခွဲခြမ်းစိတ်ဖြာမှုမှ အဖြေမရရှိပါ။");
+  }
+  return analysisResult;
+}
+
 let hkunVoiceObjectUrl = null;
 
 function splitTextForTTS(text, maxLength = 1600) {
@@ -1718,11 +1725,6 @@ async function renderFinalVideo(videoKey, scenePlan, audioDuration) {
 
 window.generateMyanmarVoice = generateMyanmarVoice;
 window.renderFinalVideo = renderFinalVideo;
-
-return await readJSON(
-  response
-);
-}
 
 
 /* =====================================
@@ -1968,11 +1970,8 @@ console.log(
       );
 
 
-      alert(
-        "✅ Gemini Video Analysis အောင်မြင်ပါပြီ!\n\n" +
-        "Video ကို Gemini က ကြည့်ပြီး " +
-        "Story / Scene Analysis ပြန်ရပါပြီ။"
-      );
+      // Final MP4 has already been rendered successfully; do not imply analysis alone is the final result.
+      console.log("HKUN AI final recap video completed successfully.");
 
 
       startButton.disabled =
