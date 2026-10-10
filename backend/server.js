@@ -2179,9 +2179,11 @@ app.post("/api/render-video", renderUpload.single("audio"), async (req, res) => 
       // Assemble selected source intervals in story order, then fit picture to narration duration.
       const filters = [];
       const labels = [];
+      const sourceLabels = scenePlan.map((s, i) => "src" + i);
+      filters.push("[0:v:0]split=" + scenePlan.length + sourceLabels.map(label => "[" + label + "]").join(""));
       scenePlan.forEach((s, i) => {
         const label = "v" + i;
-        filters.push("[0:v:0]trim=start=" + s.start.toFixed(3) + ":end=" + s.end.toFixed(3) + ",setpts=PTS-STARTPTS[" + label + "]");
+        filters.push("[" + sourceLabels[i] + "]trim=start=" + s.start.toFixed(3) + ":end=" + s.end.toFixed(3) + ",setpts=PTS-STARTPTS[" + label + "]");
         labels.push("[" + label + "]");
       });
       filters.push(labels.join("") + "concat=n=" + scenePlan.length + ":v=1:a=0,tpad=stop_mode=clone:stop_duration=" + audioDuration.toFixed(3) + ",trim=duration=" + audioDuration.toFixed(3) + ",setpts=PTS-STARTPTS[vout]");
