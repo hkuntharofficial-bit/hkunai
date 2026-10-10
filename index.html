@@ -1569,9 +1569,19 @@ async function generateMyanmarVoice(scriptText) {
     audioParts.push(await response.arrayBuffer());
   }
 
-  const audioBlob = new Blob(audioParts, {
-    type: "audio/mpeg"
+  // Merge individual MP3s server-side; raw byte concatenation repeats MP3 headers.
+  stages[3].textContent = "အသံအပိုင်းများကို ပေါင်းစည်းနေသည်...";
+  const mergeForm = new FormData();
+  audioParts.forEach((part, index) => {
+    mergeForm.append("audioChunks", new Blob([part], { type: "audio/mpeg" }), "chunk-" + String(index + 1).padStart(4, "0") + ".mp3");
   });
+  const mergeResponse = await fetch(BACKEND + "/api/merge-audio", { method: "POST", body: mergeForm });
+  if (!mergeResponse.ok) {
+    const detail = await mergeResponse.text();
+    throw new Error("အသံအပိုင်းများ ပေါင်းစည်းမရပါ: " + detail.slice(0, 300));
+  }
+  const audioBlob = await mergeResponse.blob();
+  if (!audioBlob.size) throw new Error("ပေါင်းစည်းထားသော MP3 ဖိုင် အလွတ်ဖြစ်နေပါသည်။");
   window.hkunVoiceBlob = audioBlob;
 
   if (hkunVoiceObjectUrl) {
