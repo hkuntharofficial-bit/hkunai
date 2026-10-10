@@ -1462,7 +1462,7 @@ async function analyzeVideo(videoKey, mimeType, recapStyle) {
         { cache: "no-store" }
       );
       const progress = await readJSON(progressResponse);
-      if (progress.phase === "failed") throw new Error(progress.error || "Story Understanding မအောင်မြင်ပါ။");
+      if (progress.phase === "failed") throw new Error("Story Understanding မအောင်မြင်ပါ: " + (progress.error || "မသိရှိသော အမှား"));
       const completed = Number(progress.completed || 0);
       const total = Number(progress.total || 1);
       const detail = progress.message || "AI က ဗီဒီယိုတစ်ပုဒ်လုံးကို နားလည်နေပါသည်...";
