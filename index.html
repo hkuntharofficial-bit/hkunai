@@ -1469,12 +1469,34 @@ async function analyzeVideo(videoKey, mimeType, recapStyle) {
       const total = Number(progress.total || 0);
       const percent = Number(progress.percent || 1);
       const detail = progress.message || "AI က ဗီဒီယိုကို နားလည်နေပါသည်...";
-      setProgress(Math.max(28, Math.min(48, 28 + percent * 0.2)), detail);
-      stages[1].textContent = total > 0
-        ? "Analyzing video " + completed + "/" + total + "..."
-        : "Preparing video analysis...";
-      stages[1].className = "stage-status active";
-      if (progress.phase === "completed") finished = true;
+      if (progress.phase === "starting" || progress.phase === "splitting") {
+        // Split every source segment first; Story Understanding starts only
+        // after the full chunk set has been prepared.
+        setProgress(Math.max(24, Math.min(31, 24 + percent * 0.07)),
+          progress.message || "Story Understanding မစခင် ဗီဒီယိုအပိုင်းများကို ကြိုခွဲနေပါသည်...");
+        stages[0].textContent = total > 0
+          ? "Pre-splitting " + completed + "/" + total + "..."
+          : "Preparing video chunks...";
+        stages[0].className = "stage-status active";
+        stages[1].textContent = "Waiting for all chunks...";
+        stages[1].className = "stage-status";
+      } else if (progress.phase === "analyzing") {
+        stages[0].textContent = "Video chunks ready";
+        stages[0].className = "stage-status done";
+        stages[1].textContent = total > 0
+          ? "Understanding " + completed + "/" + total + "..."
+          : "Analyzing story...";
+        stages[1].className = "stage-status active";
+        setProgress(Math.max(31, Math.min(48, 31 + percent * 0.17)), detail);
+      } else if (progress.phase === "completed") {
+        stages[0].textContent = "Video chunks ready";
+        stages[0].className = "stage-status done";
+        stages[1].textContent = "Story Understanding complete";
+        stages[1].className = "stage-status done";
+        setProgress(48, "ဗီဒီယိုအပိုင်းအားလုံးကို ခွဲပြီး ဇာတ်လမ်းနားလည်မှု ပြီးပါပြီ။");
+        finished = true;
+      }
+      if (progress.phase === "failed") throw new Error(progress.error || "Story Understanding မအောင်မြင်ပါ။");
     } catch (error) {
       pollError = error;
       if (String(error?.message || "").includes("Story Understanding")) throw error;
