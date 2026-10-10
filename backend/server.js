@@ -2198,8 +2198,8 @@ app.post("/api/render-video", renderUpload.single("audio"), async (req, res) => 
       }
       scenePlan = scenePlan.slice(0, 12).filter(s => s.start < safeSourceDuration && s.end <= safeSourceDuration + 0.05);
       if (!scenePlan.length) {
-        console.warn("AI scene timestamps could not be validated; using original-video sync render");
-        scenePlan = [];
+        console.warn("AI scene timestamps could not be validated; using a single opening segment and guarded render fallback");
+        scenePlan = [{ start: 0, end: Math.max(0.5, safeSourceDuration) }];
       }
       // Use independent seeked inputs rather than split=N; split branches can buffer large videos and exhaust Render memory.
       const args = ["-hide_banner","-y","-loglevel","warning"];
