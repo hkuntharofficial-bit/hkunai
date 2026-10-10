@@ -1572,6 +1572,18 @@ Do not assume information that is not visible or supported by the video.
    Split long source videos into 10–45 second pieces, analyze
    each piece independently, then return ordered summaries.
 ========================================================= */
+const videoAnalysisProgress = new Map();
+
+app.get("/api/analyze-video-progress", (req, res) => {
+  const key = String(req.query.key || "");
+  if (!key.startsWith("uploads/")) {
+    return res.status(400).json({ ok: false, error: "A valid uploaded video key is required" });
+  }
+  const progress = videoAnalysisProgress.get(key);
+  if (!progress) return res.json({ ok: true, phase: "starting", completed: 0, total: 0, percent: 0 });
+  return res.json({ ok: true, ...progress });
+});
+
 app.post("/api/analyze-video-chunks", async (req, res) => {
   const body = req.body || {};
   const key = String(body.key || "");
@@ -1597,6 +1609,7 @@ app.post("/api/analyze-video-chunks", async (req, res) => {
     // are normally between 10 and 45 seconds rather than leaving a tiny tail.
     const chunkCount = Math.max(1, Math.ceil(duration / 45));
     const chunkDuration = duration / chunkCount;
+    setAnalysisProgress({ phase: "splitting", completed: 0, total: chunkCount, percent: 5, message: "ဗီဒီယိုကို " + chunkCount + " ပိုင်း ခွဲနေပါသည်..." });
     const segments = new Array(chunkCount);
     const chunkFiles = [];
     for (let i = 0; i < chunkCount; i++) {
@@ -1617,9 +1630,11 @@ app.post("/api/analyze-video-chunks", async (req, res) => {
       if (!fs.existsSync(chunkPath) || fs.statSync(chunkPath).size < 1024) {
         throw new Error("ဗီဒီယိုအပိုင်း " + (i + 1) + " ကို ခွဲထုတ်မရပါ။");
       }
+      setAnalysisProgress({ phase: "splitting", completed: i + 1, total: chunkCount, percent: 5 + Math.round(((i + 1) / chunkCount) * 10), message: "ဗီဒီယိုအပိုင်း " + (i + 1) + "/" + chunkCount + " ခွဲပြီးပါပြီ" });
     }
 
-    // Analyze up to two independent segments at once to reduce total wait time
+    setAnalysisProgress({ phase: "analyzing", completed: 0, total: chunkCount, percent: 15, message: "AI က ဇာတ်လမ်းအပိုင်းများကို ခွဲခြမ်းစိတ်ဖြာနေပါသည်..." });
+    // Analyze up to two independent segments to reduce total wait time
     // without flooding Gemini or the host's memory/CPU.
     let nextChunkIndex = 0;
     async function analyzeChunkWorker() {
@@ -1676,11 +1691,14 @@ app.post("/api/analyze-video-chunks", async (req, res) => {
           duration: Number(length.toFixed(3)),
           analysis
         };
+        const completed = segments.filter(Boolean).length;
+        setAnalysisProgress({ phase: "analyzing", completed, total: chunkCount, percent: 15 + Math.round((completed / chunkCount) * 80), message: "AI ခွဲခြမ်းစိတ်ဖြာပြီး " + completed + "/" + chunkCount + " ပိုင်း" });
         console.log("CHUNK ANALYZED:", chunk.index, "/", chunkCount, "source seconds", start, "-", start + length);
         removeTempFile(chunkPath);
       }
     }
     await Promise.all(Array.from({ length: Math.min(2, chunkFiles.length) }, () => analyzeChunkWorker()));
+    setAnalysisProgress({ phase: "completed", completed: chunkCount, total: chunkCount, percent: 100, message: "Story Understanding ပြီးပါပြီ" });
 
     return res.json({
       ok: true,
@@ -1691,6 +1709,10 @@ app.post("/api/analyze-video-chunks", async (req, res) => {
       analysis: segments.map(s => "[SEGMENT " + s.index + " | " + s.start + "–" + s.end + " sec]\n" + s.analysis).join("\n\n")
     });
   } catch (error) {
+    if (key.startsWith("uploads/")) {
+      const previous = videoAnalysisProgress.get(key) || {};
+      videoAnalysisProgress.set(key, { ...previous, phase: "failed", error: String(error?.message || error).slice(0, 1000), message: "Story Understanding မအောင်မြင်ပါ", updatedAt: Date.now() });
+    }
     console.error("CHUNKED VIDEO ANALYSIS ERROR:", error?.stack || error);
     if (!res.headersSent) return res.status(500).json({
       ok: false,
