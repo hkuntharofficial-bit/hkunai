@@ -1551,6 +1551,7 @@ async function renderFinalVideo(videoKey) {
   stages[5].className = "stage-status done";
   stages[7].textContent = "✓ Final MP4 completed";
   stages[7].className = "stage-status done";
+  setProgress(100,"ပြီးပါပြီ — Final MP4 ကို ကြည့်ရှု/ဒေါင်းလုဒ်လုပ်နိုင်ပါပြီ။");
   document.getElementById("finalVideoMessage").textContent =
     "MP4 အရွယ်အစား " + (result.sizeBytes / (1024 * 1024)).toFixed(1) +
     " MB။ Download link သည် ၂၄ နာရီအတွင်း သက်တမ်းရှိပါသည်။";
@@ -1666,6 +1667,7 @@ startButton.addEventListener(
       window.hkunUploadKey =
         result.key;
 
+      setProgress(25,"ဗီဒီယိုတင်ပြီးပါပြီ — AI ခွဲခြမ်းစိတ်ဖြာမှု စတင်နေပါသည်...");
 
       stages[0].textContent =
         "✓ Video uploaded";
@@ -1691,6 +1693,7 @@ startButton.addEventListener(
         ).value;
 
 
+      setProgress(28,"AI က မူရင်းဗီဒီယိုကို ခွဲခြမ်းစိတ်ဖြာနေပါသည်...");
       const analysis =
         await analyzeVideo(
 
@@ -1706,6 +1709,7 @@ startButton.addEventListener(
 
       window.hkunGeminiAnalysis =
         analysis;
+      setProgress(50,"ဗီဒီယိုနားလည်မှု ပြီးပါပြီ — မြန်မာ Recap Script ဖန်တီးနေပါသည်...");
 /* STEP 3 — MYANMAR RECAP SCRIPT */
 
 stages[2].textContent =
@@ -1713,6 +1717,7 @@ stages[2].textContent =
 
 stages[2].className =
   "stage-status active";
+setProgress(55,"မြန်မာ Recap Script ဖန်တီးနေပါသည်...");
 
 const scriptResponse =
   await fetch(
@@ -1738,8 +1743,10 @@ const scriptResult =
 window.hkunRecapScript =
   scriptResult.script;
        
+setProgress(70,"မြန်မာအသံနှင့် SRT စာတန်းထိုး ထုတ်လုပ်နေပါသည်...");
 await window.generateMyanmarVoice(scriptResult.script);
 
+      setProgress(82,"အသံနှင့် စာတန်းထိုး အဆင်သင့်ဖြစ်ပါပြီ — MP4 Rendering စတင်နေပါသည်...");
       await window.renderFinalVideo(result.key);
        
 stages[2].textContent =
