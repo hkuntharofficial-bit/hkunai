@@ -2105,6 +2105,40 @@ function runFFmpeg(args) {
   });
 }
 
+// Generate a source-timestamp scene plan aligned to the actual Myanmar narration.
+app.post("/api/scene-plan", async (req, res) => {
+  try {
+    if (!GEMINI) return res.status(503).json({ ok: false, error: "GEMINI_API_KEY is not configured" });
+    const body = req.body || {};
+    const analysis = String(body.analysis || "");
+    const script = String(body.script || "");
+    const duration = Number(body.audioDuration);
+    if (!analysis.trim() || !script.trim()) return res.status(400).json({ ok: false, error: "Video analysis and narration script are required" });
+    if (!Number.isFinite(duration) || duration < 1 || duration > 7200) return res.status(400).json({ ok: false, error: "Valid narration duration is required" });
+    const prompt = [
+      "Return ONLY JSON: {\"scenes\":[{\"start\":0,\"end\":5,\"narration\":\"phrase\"}]}.",
+      "Create a movie recap edit plan matching the narration to source video scenes.",
+      "Source analysis with source-video timestamps:", analysis.slice(0, 24000),
+      "Narration script:", script.slice(0, 18000),
+      "Narration audio duration seconds: " + duration.toFixed(2),
+      "Use only source timestamps explicitly supported by the analysis. start/end are SOURCE video seconds, end > start. Choose distinct relevant scenes in story order. Usually 5-15 scenes. Return valid JSON only."
+    ].join("\n\n");
+    let response;
+    try { response = await GEMINI.models.generateContent({ model: GEMINI_MODEL, contents: prompt }); }
+    catch (e) { response = await GEMINI.models.generateContent({ model: "gemini-2.5-flash", contents: prompt }); }
+    const raw = String(response.text || "").trim().replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "");
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed.scenes)) throw new Error("No scenes array returned");
+    const scenes = parsed.scenes.slice(0, 40).map(s => ({ start: Number(s.start), end: Number(s.end), narration: String(s.narration || "").slice(0, 400) })).filter(s => Number.isFinite(s.start) && Number.isFinite(s.end) && s.start >= 0 && s.end > s.start);
+    if (!scenes.length) throw new Error("No valid scene timestamps returned");
+    console.log("SCENE PLAN CREATED:", scenes.length, "scenes");
+    return res.json({ ok: true, scenes });
+  } catch (error) {
+    console.error("SCENE PLAN ERROR:", error?.stack || error);
+    return res.status(500).json({ ok: false, error: "Could not create narration-matched scene plan", message: String(error?.message || error).slice(0, 800) });
+  }
+});
+
 app.post("/api/render-video", renderUpload.single("audio"), async (req, res) => {
   const audioPath = req.file?.path;
   const sourcePath = path.join(TEMP_DIR, "hkun-source-" + crypto.randomUUID() + ".mp4");
