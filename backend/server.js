@@ -2280,7 +2280,7 @@ app.post("/api/merge-audio", mergeAudioUpload.array("audioChunks", 100), async (
   const outputPath = path.join(TEMP_DIR, "hkun-audio-merged-" + crypto.randomUUID() + ".mp3");
   try {
     if (!files.length) return res.status(400).json({ ok: false, error: "No audio chunks were uploaded" });
-    fs.writeFileSync(listPath, files.map(file => "file " + JSON.stringify(file.path)).join("\n"), "utf8");
+    fs.writeFileSync(listPath, files.map(file => "file '" + file.path.replace(/'/g, "'\\''") + "'").join("\n"), "utf8");
     await runFFmpeg(["-hide_banner", "-y", "-f", "concat", "-safe", "0", "-i", listPath, "-vn", "-c:a", "libmp3lame", "-b:a", "128k", "-ar", "24000", outputPath]);
     const stat = fs.statSync(outputPath);
     if (!stat.size) throw new Error("Merged narration audio is empty");
