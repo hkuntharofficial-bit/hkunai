@@ -2094,12 +2094,13 @@ function runFFmpeg(args) {
     const child = spawn(ffmpegPath, args, { stdio: ["ignore", "ignore", "pipe"] });
     let stderr = "";
     child.stderr.on("data", chunk => {
-      stderr = (stderr + chunk.toString()).slice(-12000);
+      stderr = (stderr + chunk.toString()).slice(-16000);
     });
-    child.on("error", reject);
-    child.on("close", code => {
+    child.on("error", error => reject(new Error("Could not start FFmpeg: " + error.message)));
+    child.on("close", (code, signal) => {
       if (code === 0) return resolve();
-      reject(new Error("FFmpeg exited with code " + code + ": " + stderr.slice(-2500)));
+      const reason = signal ? "signal " + signal : "code " + code;
+      reject(new Error("FFmpeg exited with " + reason + ": " + (stderr.slice(-3500) || "No FFmpeg diagnostic output; the hosting instance may have terminated the render process.")));
     });
   });
 }
@@ -2139,11 +2140,14 @@ app.post("/api/render-video", renderUpload.single("audio"), async (req, res) => 
       "-i", audioPath,
       "-f", "srt", "-i", subtitlePath,
       "-map", "0:v:0", "-map", "1:a:0", "-map", "2:0",
-      "-vf", "scale='min(1280,iw)':-2",
-      "-c:v", "libx264", "-preset", "veryfast", "-crf", "27",
+      // Keep peak memory low on Render's free instance; 720p is sufficient for recap output.
+      "-vf", "scale='min(960,iw)':-2",
+      "-c:v", "libx264", "-preset", "ultrafast", "-crf", "30",
+      "-threads", "1",
       "-pix_fmt", "yuv420p",
-      "-c:a", "aac", "-b:a", "128k",
+      "-c:a", "aac", "-b:a", "96k",
       "-c:s", "mov_text",
+      "-max_muxing_queue_size", "2048",
       "-map_metadata", "-1",
       "-shortest", "-movflags", "+faststart",
       outputPath
