@@ -1453,7 +1453,7 @@ async function analyzeVideo(
   const response =
     await fetch(
       BACKEND +
-      "/api/analyze-video",
+      "/api/analyze-video-chunks",
       {
         method: "POST",
 
@@ -1885,27 +1885,35 @@ stages[2].className =
   "stage-status active";
 setProgress(55,"မြန်မာ Recap Script ဖန်တီးနေပါသည်...");
 
-const scriptResponse =
-  await fetch(
-    BACKEND + "/api/generate-script",
-    {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({
-        analysis: analysis.analysis,
-        recapStyle:
-          document.getElementById("style").value,
-        voice:
-          document.getElementById("voice").value
-      })
-    }
-  );
+const recapSegments = Array.isArray(analysis.segments) && analysis.segments.length
+  ? analysis.segments
+  : [{ index: 1, start: 0, end: 0, analysis: analysis.analysis }];
 
-const scriptResult =
-  await readJSON(scriptResponse);
-
+const recapScriptParts = [];
+for (let i = 0; i < recapSegments.length; i++) {
+  const segment = recapSegments[i];
+  setProgress(55 + ((i + 1) / recapSegments.length) * 8,
+    "အပိုင်းလိုက် Recap ဖန်တီးနေပါသည်... " + (i + 1) + "/" + recapSegments.length);
+  stages[2].textContent = "Generating recap " + (i + 1) + "/" + recapSegments.length + "...";
+  stages[2].className = "stage-status active";
+  const scriptResponse = await fetch(BACKEND + "/api/generate-script", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      analysis: segment.analysis,
+      recapStyle: document.getElementById("style").value,
+      voice: document.getElementById("voice").value
+    })
+  });
+  const scriptResult = await readJSON(scriptResponse);
+  if (!scriptResult.script || !String(scriptResult.script).trim()) {
+    throw new Error("ဗီဒီယိုအပိုင်း " + (i + 1) + " အတွက် Recap စာသား မရရှိပါ။");
+  }
+  recapScriptParts.push(String(scriptResult.script).trim());
+}
+const scriptResult = {
+  script: recapScriptParts.join("\n\n")
+};
 window.hkunRecapScript = scriptResult.script;
 stages[2].textContent = "✓ Myanmar recap script completed";
 stages[2].className = "stage-status done";
