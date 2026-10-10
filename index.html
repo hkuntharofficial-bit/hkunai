@@ -1441,84 +1441,57 @@ throw error;
    GEMINI VIDEO ANALYSIS
 ===================================== */
 
-async function analyzeVideo(
-  videoKey,
-  mimeType,
-  recapStyle
-){
+async function analyzeVideo(videoKey, mimeType, recapStyle) {
+  const request = fetch(BACKEND + "/api/analyze-video-chunks", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      key: videoKey,
+      mimeType: mimeType || "video/mp4",
+      recapStyle: recapStyle || "Movie Recap",
+      prompt: "Analyze the actual video, preserve chronology, and do not invent events."
+    })
+  });
 
-  const response =
-    await fetch(
-      BACKEND +
-      "/api/analyze-video-chunks",
-      {
-        method: "POST",
-
-        headers: {
-          "Content-Type":
-            "application/json"
-        },
-
-        body: JSON.stringify({
-
-          key:
-            videoKey,
-
-          mimeType:
-            mimeType ||
-            "video/mp4",
-
-          prompt: `
-You are HKUN AI, a professional Myanmar Movie Recap video analyst.
-
-Recap Style:
-${recapStyle}
-
-Analyze the ACTUAL video carefully.
-
-Do NOT invent any event, character,
-location, dialogue, relationship,
-or information.
-
-Identify the important story events
-in chronological order.
-
-For every important event provide:
-
-- Approximate video timestamp
-- What actually happens
-- Important characters
-- Important visual scene
-- Why the scene matters
-
-Focus on scenes that can later be
-matched with Myanmar narration.
-
-Maintain the original story chronology
-and continuity.
-
-Return clear chronological analysis.
-
-The analysis will later be used for:
-
-1. Myanmar Original Movie Recap
-2. Recap Script Generation
-3. Semantic Scene Matching
-4. Audio / Video Synchronization
-5. Selecting relevant original footage
-
-Only describe information supported
-by the actual video.
-`
-        })
-      }
-    );
-
-  const analysisResult = await readJSON(response);
-  if (!analysisResult.ok || !String(analysisResult.analysis || "").trim()) {
-    throw new Error(analysisResult.message || analysisResult.error || "ဗီဒီယိုအပိုင်းခွဲခြမ်းစိတ်ဖြာမှုမှ အဖြေမရရှိပါ။");
+  let finished = false;
+  let analysisResponse;
+  let pollError = null;
+  const startedAt = Date.now();
+  while (!finished && Date.now() - startedAt < 30 * 60 * 1000) {
+    try {
+      const progressResponse = await fetch(
+        BACKEND + "/api/analyze-video-progress?key=" + encodeURIComponent(videoKey),
+        { cache: "no-store" }
+      );
+      const progress = await readJSON(progressResponse);
+      if (progress.phase === "failed") throw new Error(progress.error || "Story Understanding မအောင်မြင်ပါ။");
+      const completed = Number(progress.completed || 0);
+      const total = Number(progress.total || 0);
+      const percent = Number(progress.percent || 1);
+      const detail = progress.message || "AI က ဗီဒီယိုကို နားလည်နေပါသည်...";
+      setProgress(Math.max(28, Math.min(48, 28 + percent * 0.2)), detail);
+      stages[1].textContent = total > 0
+        ? "Analyzing video " + completed + "/" + total + "..."
+        : "Preparing video analysis...";
+      stages[1].className = "stage-status active";
+      if (progress.phase === "completed") finished = true;
+    } catch (error) {
+      pollError = error;
+      if (String(error?.message || "").includes("Story Understanding")) throw error;
+    }
+    if (!finished) await new Promise(resolve => setTimeout(resolve, 2500));
   }
-  return analysisResult;
+
+  if (!finished && Date.now() - startedAt >= 30 * 60 * 1000) {
+    throw new Error("Story Understanding က မိနစ် ၃၀ ကျော်ကြာနေပါသည်။ Render Logs ကို စစ်ဆေးပြီး ပြန်ကြိုးစားပါ။");
+  }
+  const response = await request;
+  analysisResponse = await readJSON(response);
+  if (!analysisResponse.ok || !String(analysisResponse.analysis || "").trim() ||
+      !Array.isArray(analysisResponse.segments) || !analysisResponse.segments.length) {
+    throw new Error(analysisResponse.message || analysisResponse.error || "ဗီဒီယိုအပိုင်းခွဲခြမ်းစိတ်ဖြာမှုမှ အဖြေမရရှိပါ။");
+  }
+  return analysisResponse;
 }
 
 let hkunVoiceObjectUrl = null;
