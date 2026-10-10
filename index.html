@@ -1537,10 +1537,23 @@ async function renderFinalVideo(videoKey) {
   document.getElementById("finalVideoMessage").textContent =
     "ဗီဒီယို၊ မြန်မာအသံနှင့် စာတန်းထိုးကို ပေါင်းစည်းနေပါသည်။ မပိတ်ဘဲ စောင့်ပေးပါ။";
 
-  const response = await fetch(BACKEND + "/api/render-video", { method: "POST", body: form });
-  const result = await readJSON(response);
-  if (!result.ok || !result.downloadUrl) {
-    throw new Error(result.message || result.error || "Final MP4 ထုတ်လုပ်မရပါ။");
+  let result;
+  try {
+    const response = await fetch(BACKEND + "/api/render-video", { method: "POST", body: form });
+    result = await readJSON(response);
+    if (!response.ok || !result.ok || !result.downloadUrl) {
+      throw new Error(result.message || result.error || ("Final MP4 ထုတ်လုပ်မရပါ (HTTP " + response.status + ")"));
+    }
+  } catch (error) {
+    const detail = String(error?.message || error || "Unknown render error");
+    stages[5].textContent = "❌ Audio / Video Sync မအောင်မြင်ပါ";
+    stages[5].className = "stage-status active";
+    stages[7].textContent = "❌ Final Rendering Failed";
+    stages[7].className = "stage-status active";
+    document.getElementById("finalVideoMessage").textContent =
+      "MP4 ပေါင်းစည်း/ထုတ်လုပ်မှု မပြီးဆုံးပါ။ အသံ MP3 နှင့် SRT ကို ထိန်းသိမ်းထားပြီး ထပ်ကြိုးစားနိုင်ပါသည်။ အမှား: " + detail;
+    setProgress(82, "Final Rendering မအောင်မြင်ပါ — MP4 ဖိုင်မထွက်သေးပါ။");
+    throw error;
   }
   document.getElementById("finalVideoPlayer").src = result.downloadUrl;
   document.getElementById("finalVideoDownload").href = result.downloadUrl;
@@ -1802,11 +1815,12 @@ console.log(
           ? "Backend Server ကို ချိတ်ဆက်မရပါ။ Render မှာ hkunai-backend service ရဲ့ Status/Logs ကိုစစ်ပါ၊ ပြီးရင် Internet ပြန်စစ်ပြီး ထပ်ကြိုးစားပါ။"
           : rawMessage;
 
-      stages[0].textContent =
-        "❌ Processing Failed";
-
-      stages[0].className =
-        "stage-status active";
+      const renderFailed =
+        String(stages[7]?.textContent || "").toLowerCase().includes("failed");
+      if (!renderFailed) {
+        stages[0].textContent = "❌ Processing Failed";
+        stages[0].className = "stage-status active";
+      }
 
 
       errorBox.style.display =
@@ -1815,9 +1829,10 @@ console.log(
 
       errorBox.innerHTML =
         "❌ " +
-        esc(
-          friendlyMessage
-        );
+        esc(friendlyMessage);
+      if (renderFailed) {
+        setProgress(82, "MP4 ထုတ်လုပ်မှု ရပ်သွားပါသည် — အမှားကို ပြင်ပြီး ပြန်စမ်းနိုင်ပါသည်။");
+      }
 
 
       startButton.disabled =
