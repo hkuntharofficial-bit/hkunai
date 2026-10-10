@@ -2178,10 +2178,11 @@ app.post("/api/render-video", renderUpload.single("audio"), async (req, res) => 
 
     if (scenePlan.length && Number.isFinite(audioDuration) && audioDuration > 0) {
       // Bound scene count and verify source duration before launching FFmpeg.
-      const probeArgs = ["-v","error","-show_entries","format=duration","-of","default=noprint_wrappers=1:nokey=1",sourcePath];
-      const probe = spawnSync(ffmpegPath.replace(/ffmpeg(?:\.exe)?$/i, "ffprobe"), probeArgs, { encoding: "utf8", timeout: 15000 });
-      const sourceDuration = Number(String(probe.stdout || "").trim());
-      if (!Number.isFinite(sourceDuration) || sourceDuration <= 0) throw new Error("Could not read source video duration for scene matching");
+      const probe = spawnSync(ffmpegPath, ["-hide_banner","-i",sourcePath], { encoding: "utf8", timeout: 15000 });
+      const probeText = String(probe.stderr || "") + "\n" + String(probe.stdout || "");
+      const durationMatch = probeText.match(/Duration:\\s*(\\d+):(\\d+):(\\d+(?:\\.\\d+)?)/i);
+      const sourceDuration = durationMatch ? Number(durationMatch[1]) * 3600 + Number(durationMatch[2]) * 60 + Number(durationMatch[3]) : NaN;
+      if (!Number.isFinite(sourceDuration) || sourceDuration <= 0) throw new Error("Could not read source video duration from FFmpeg probe");
       scenePlan = scenePlan.slice(0, 12).filter(s => s.start < sourceDuration && s.end <= sourceDuration + 0.05);
       if (!scenePlan.length) throw new Error("AI scene timestamps do not match the source video duration");
       // Use independent seeked inputs rather than split=N; split branches can buffer large videos and exhaust Render memory.
