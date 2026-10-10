@@ -35,11 +35,6 @@ const {
 
 const app = express();
 
-app.get("/api/health", (req, res) => {
-  res.set("Cache-Control", "no-store");
-  res.status(200).json({ ok: true, service: "hkunai-backend", uptimeSeconds: Math.round(process.uptime()) });
-});
-
 const PORT =
   process.env.PORT || 3000;
 
@@ -955,7 +950,10 @@ app.post(
 
 
       const expectedParts = Math.ceil(session.fileSize / session.partSize);
-      if (session.parts.size !== expectedParts) {
+      const hasEveryPart = session.parts.size === expectedParts &&
+        Array.from({ length: expectedParts }, (_, index) => index + 1)
+          .every(partNumber => session.parts.has(partNumber));
+      if (!hasEveryPart) {
         return res.status(400).json({
           ok: false,
           error: "Upload is incomplete",
