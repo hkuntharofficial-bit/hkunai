@@ -2359,7 +2359,20 @@ app.post("/api/render-video", renderUpload.single("audio"), async (req, res) => 
     const match = probeText.match(/Duration:\s*(\d+):(\d+):(\d+(?:\.\d+)?)/i);
     const sourceDuration = match ? Number(match[1]) * 3600 + Number(match[2]) * 60 + Number(match[3]) : NaN;
     if (!Number.isFinite(sourceDuration) || sourceDuration <= 0) throw new Error("Could not determine source video duration");
-    if (!Number.isFinite(audioDuration) || audioDuration <= 0 || audioDuration > 7200) throw new Error("Invalid narration duration");
+    // Browser metadata for a Blob made by concatenating MP3 chunks can be
+    // missing or inaccurate. Probe the actual uploaded audio and prefer that
+    // measured duration for video synchronization.
+    const audioProbe = spawnSync(ffmpegPath, ["-hide_banner", "-i", audioPath], { encoding: "utf8", timeout: 20000, maxBuffer: 2 * 1024 * 1024 });
+    const audioProbeText = String(audioProbe.stderr || "") + "\n" + String(audioProbe.stdout || "");
+    const audioMatch = audioProbeText.match(/Duration:\s*(\d+):(\d+):(\d+(?:\.\d+)?)/i);
+    const measuredAudioDuration = audioMatch ? Number(audioMatch[1]) * 3600 + Number(audioMatch[2]) * 60 + Number(audioMatch[3]) : NaN;
+    const requestedAudioDuration = Number(req.body?.audioDuration);
+    const effectiveAudioDuration = Number.isFinite(measuredAudioDuration) && measuredAudioDuration > 0
+      ? measuredAudioDuration
+      : effectiveAudioDuration;
+    if (!Number.isFinite(effectiveAudioDuration) || effectiveAudioDuration <= 0 || effectiveAudioDuration > 7200) {
+      throw new Error("Narration MP3 duration could not be determined. Please regenerate the Myanmar Voice audio.");
+    }
 
     // Concatenate selected source scenes in planned order before synchronizing
     // the complete video to the single continuous narration track.
@@ -2373,7 +2386,7 @@ app.post("/api/render-video", renderUpload.single("audio"), async (req, res) => 
     if (!effectiveScenes.length) effectiveScenes.push({ start: 0, end: sourceDuration });
     const totalSelectedDuration = effectiveScenes.reduce((sum, s) => sum + s.end - s.start, 0);
     if (!(totalSelectedDuration > 0)) throw new Error("Scene plan contains no usable video segments");
-    const scale = audioDuration / totalSelectedDuration;
+    const scale = effectiveAudioDuration / totalSelectedDuration;
     const filterParts = [];
     if (effectiveScenes.length === 1) {
       const s = effectiveScenes[0];
@@ -2389,20 +2402,20 @@ app.post("/api/render-video", renderUpload.single("audio"), async (req, res) => 
         "concat=n=" + effectiveScenes.length + ":v=1:a=0[vjoined]");
     }
     filterParts.push("[vjoined]setpts=(PTS-STARTPTS)*" + scale.toFixed(8) +
-      ",tpad=stop_mode=clone:stop_duration=1,trim=duration=" + audioDuration.toFixed(3) +
+      ",tpad=stop_mode=clone:stop_duration=1,trim=duration=" + effectiveAudioDuration.toFixed(3) +
       ",setpts=PTS-STARTPTS[vout]");
     const args = [
       "-hide_banner", "-y", "-loglevel", "warning",
       "-i", sourcePath, "-i", audioPath, "-f", "srt", "-i", subtitlePath,
       "-filter_complex", filterParts.join(";"),
-      "-map", "[vout]", "-map", "1:a:0", "-map", "2:0", "-t", audioDuration.toFixed(3),
+      "-map", "[vout]", "-map", "1:a:0", "-map", "2:0", "-t", effectiveAudioDuration.toFixed(3),
       "-c:v", "libx264", "-preset", "ultrafast", "-crf", "28", "-threads", "1", "-pix_fmt", "yuv420p",
       "-af", "volume=" + audioVolume.toFixed(2),
       "-c:a", "aac", "-b:a", "128k", "-c:s", "mov_text", "-max_muxing_queue_size", "512",
       "-map_metadata", "0", "-movflags", "+faststart", outputPath
     ];
     console.log("SEGMENT-CONCAT FINAL RENDER:", {
-      sourceDuration, audioDuration, totalSelectedDuration, scale, audioVolume,
+      sourceDuration, requestedAudioDuration, measuredAudioDuration, effectiveAudioDuration, totalSelectedDuration, scale, audioVolume,
       sceneCount: effectiveScenes.length
     });
     await runFFmpeg(args);
