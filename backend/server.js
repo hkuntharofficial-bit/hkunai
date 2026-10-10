@@ -2134,25 +2134,49 @@ app.post("/api/render-video", renderUpload.single("audio"), async (req, res) => 
     const sourceStat = fs.statSync(sourcePath);
     if (!sourceStat.size) throw new Error("Source video download is empty");
 
-    await runFFmpeg([
+    // First try stream-copying the original video. This preserves the video
+    // bitstream exactly (no quality loss) and avoids the CPU/RAM spike that
+    // caused FFmpeg to be killed on Render for videos longer than ~3 minutes.
+    const renderArgs = [
       "-hide_banner", "-y", "-loglevel", "warning",
       "-i", sourcePath,
       "-i", audioPath,
       "-f", "srt", "-i", subtitlePath,
       "-map", "0:v:0", "-map", "1:a:0", "-map", "2:0",
-      // Preserve the source video's original dimensions, frame rate, and metadata.
-      // Re-encode only because the narration and subtitle streams must be muxed in.
-      // Ultrafast + one encoder thread reduces peak RAM on Render without downscaling.
-      "-c:v", "libx264", "-preset", "ultrafast", "-crf", "23",
-      "-threads", "1", "-thread_type", "slice",
-      "-pix_fmt", "yuv420p",
+      "-c:v", "copy",
       "-c:a", "aac", "-b:a", "128k",
       "-c:s", "mov_text",
       "-max_muxing_queue_size", "2048",
       "-map_metadata", "0",
       "-shortest", "-movflags", "+faststart",
       outputPath
-    ]);
+    ];
+    try {
+      console.log("FINAL RENDER MODE: stream-copy original video");
+      await runFFmpeg(renderArgs);
+    } catch (copyError) {
+      // Some source codecs cannot be muxed into MP4. Retry with a low-resource
+      // encode at the original dimensions; never downscale the user's source.
+      console.warn("Stream-copy render failed; retrying original-resolution encode:", String(copyError?.message || copyError).slice(0, 800));
+      try { fs.rmSync(outputPath, { force: true }); } catch {}
+      const encodeArgs = [
+        "-hide_banner", "-y", "-loglevel", "warning",
+        "-i", sourcePath,
+        "-i", audioPath,
+        "-f", "srt", "-i", subtitlePath,
+        "-map", "0:v:0", "-map", "1:a:0", "-map", "2:0",
+        "-c:v", "libx264", "-preset", "ultrafast", "-crf", "23",
+        "-threads", "1", "-thread_type", "slice",
+        "-pix_fmt", "yuv420p",
+        "-c:a", "aac", "-b:a", "128k",
+        "-c:s", "mov_text",
+        "-max_muxing_queue_size", "2048",
+        "-map_metadata", "0",
+        "-shortest", "-movflags", "+faststart",
+        outputPath
+      ];
+      await runFFmpeg(encodeArgs);
+    }
 
     const stat = fs.statSync(outputPath);
     if (!stat.size || stat.size < 1024) throw new Error("Rendered MP4 is empty or invalid");
