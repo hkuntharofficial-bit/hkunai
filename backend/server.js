@@ -2272,6 +2272,29 @@ setInterval(
    with the source video stored in R2, then saves the MP4 to R2.
 ========================================================= */
 
+// Merge independently generated MP3 chunks into one valid audio stream.
+const mergeAudioUpload = multer({ dest: TEMP_DIR, limits: { fileSize: 20 * 1024 * 1024, files: 100 } });
+app.post("/api/merge-audio", mergeAudioUpload.array("audioChunks", 100), async (req, res) => {
+  const files = req.files || [];
+  const listPath = path.join(TEMP_DIR, "hkun-audio-list-" + crypto.randomUUID() + ".txt");
+  const outputPath = path.join(TEMP_DIR, "hkun-audio-merged-" + crypto.randomUUID() + ".mp3");
+  try {
+    if (!files.length) return res.status(400).json({ ok: false, error: "No audio chunks were uploaded" });
+    fs.writeFileSync(listPath, files.map(file => "file " + JSON.stringify(file.path)).join("\n"), "utf8");
+    await runFFmpeg(["-hide_banner", "-y", "-f", "concat", "-safe", "0", "-i", listPath, "-vn", "-c:a", "libmp3lame", "-b:a", "128k", "-ar", "24000", outputPath]);
+    const stat = fs.statSync(outputPath);
+    if (!stat.size) throw new Error("Merged narration audio is empty");
+    res.setHeader("Content-Type", "audio/mpeg");
+    res.setHeader("Content-Length", String(stat.size));
+    return fs.createReadStream(outputPath).pipe(res);
+  } catch (error) {
+    console.error("MERGE AUDIO ERROR:", error?.stack || error);
+    if (!res.headersSent) return res.status(500).json({ ok: false, error: "Could not merge narration audio", message: String(error?.message || error).slice(0, 800) });
+  } finally {
+    for (const file of [...files.map(item => item.path), listPath, outputPath]) { try { fs.rmSync(file, { force: true }); } catch {} }
+  }
+});
+
 const renderUpload = multer({
   dest: TEMP_DIR,
   limits: {
