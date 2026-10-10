@@ -2129,8 +2129,9 @@ app.post("/api/scene-plan", async (req, res) => {
     const raw = String(response.text || "").trim().replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "");
     const parsed = JSON.parse(raw);
     if (!Array.isArray(parsed.scenes)) throw new Error("No scenes array returned");
-    const scenes = parsed.scenes.slice(0, 40).map(s => ({ start: Number(s.start), end: Number(s.end), narration: String(s.narration || "").slice(0, 400) })).filter(s => Number.isFinite(s.start) && Number.isFinite(s.end) && s.start >= 0 && s.end > s.start);
+    const scenes = parsed.scenes.slice(0, 12).map(s => ({ start: Number(s.start), end: Number(s.end), narration: String(s.narration || "").slice(0, 400) })).filter(s => Number.isFinite(s.start) && Number.isFinite(s.end) && s.start >= 0 && s.end > s.start && s.end - s.start >= 0.5);
     if (!scenes.length) throw new Error("No valid scene timestamps returned");
+    scenes.sort((a, b) => a.start - b.start);
     console.log("SCENE PLAN CREATED:", scenes.length, "scenes");
     return res.json({ ok: true, scenes });
   } catch (error) {
@@ -2176,29 +2177,26 @@ app.post("/api/render-video", renderUpload.single("audio"), async (req, res) => 
     if (!sourceStat.size) throw new Error("Source video download is empty");
 
     if (scenePlan.length && Number.isFinite(audioDuration) && audioDuration > 0) {
-      // Assemble selected source intervals in story order, then fit picture to narration duration.
+      // Bound scene count and verify source duration before launching FFmpeg.
+      const probeArgs = ["-v","error","-show_entries","format=duration","-of","default=noprint_wrappers=1:nokey=1",sourcePath];
+      const probe = spawnSync(ffmpegPath.replace(/ffmpeg(?:\.exe)?$/i, "ffprobe"), probeArgs, { encoding: "utf8", timeout: 15000 });
+      const sourceDuration = Number(String(probe.stdout || "").trim());
+      if (!Number.isFinite(sourceDuration) || sourceDuration <= 0) throw new Error("Could not read source video duration for scene matching");
+      scenePlan = scenePlan.slice(0, 12).filter(s => s.start < sourceDuration && s.end <= sourceDuration + 0.05);
+      if (!scenePlan.length) throw new Error("AI scene timestamps do not match the source video duration");
+      // Use independent seeked inputs rather than split=N; split branches can buffer large videos and exhaust Render memory.
+      const args = ["-hide_banner","-y","-loglevel","warning"];
+      scenePlan.forEach(s => { args.push("-ss", s.start.toFixed(3), "-t", (s.end-s.start).toFixed(3), "-i", sourcePath); });
+      const audioIndex = scenePlan.length;
+      const subtitleIndex = audioIndex + 1;
+      args.push("-i", audioPath, "-f", "srt", "-i", subtitlePath);
       const filters = [];
       const labels = [];
-      const sourceLabels = scenePlan.map((s, i) => "src" + i);
-      filters.push("[0:v:0]split=" + scenePlan.length + sourceLabels.map(label => "[" + label + "]").join(""));
-      scenePlan.forEach((s, i) => {
-        const label = "v" + i;
-        filters.push("[" + sourceLabels[i] + "]trim=start=" + s.start.toFixed(3) + ":end=" + s.end.toFixed(3) + ",setpts=PTS-STARTPTS[" + label + "]");
-        labels.push("[" + label + "]");
-      });
+      scenePlan.forEach((s, i) => { const label = "v" + i; filters.push("[" + i + ":v:0]setpts=PTS-STARTPTS[" + label + "]"); labels.push("[" + label + "]"); });
       filters.push(labels.join("") + "concat=n=" + scenePlan.length + ":v=1:a=0,tpad=stop_mode=clone:stop_duration=" + audioDuration.toFixed(3) + ",trim=duration=" + audioDuration.toFixed(3) + ",setpts=PTS-STARTPTS[vout]");
-      const sceneArgs = [
-        "-hide_banner","-y","-loglevel","warning",
-        "-i",sourcePath,"-i",audioPath,"-f","srt","-i",subtitlePath,
-        "-filter_complex",filters.join(";"),
-        "-map","[vout]","-map","1:a:0","-map","2:0",
-        "-t",audioDuration.toFixed(3),
-        "-c:v","libx264","-preset","ultrafast","-crf","23","-threads","1","-pix_fmt","yuv420p",
-        "-c:a","aac","-b:a","128k","-c:s","mov_text",
-        "-max_muxing_queue_size","2048","-map_metadata","0","-shortest","-movflags","+faststart",outputPath
-      ];
-      console.log("FINAL RENDER MODE: narration-matched scene montage", scenePlan.length, "scenes", "audioDuration:", audioDuration);
-      await runFFmpeg(sceneArgs);
+      args.push("-filter_complex", filters.join(";"), "-map", "[vout]", "-map", audioIndex + ":a:0", "-map", subtitleIndex + ":0", "-t", audioDuration.toFixed(3), "-c:v", "libx264", "-preset", "ultrafast", "-crf", "23", "-threads", "1", "-pix_fmt", "yuv420p", "-c:a", "aac", "-b:a", "128k", "-c:s", "mov_text", "-max_muxing_queue_size", "2048", "-map_metadata", "0", "-shortest", "-movflags", "+faststart", outputPath);
+      console.log("FINAL RENDER MODE: memory-bounded scene montage", scenePlan.length, "scenes", "sourceDuration:", sourceDuration, "audioDuration:", audioDuration);
+      await runFFmpeg(args);
     } else {
     // No valid edit plan: preserve the original video and synchronize narration.
     const renderArgs = [
