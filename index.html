@@ -1903,10 +1903,15 @@ async function recapScriptWorker() {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        analysis: "WHOLE-VIDEO STORY UNDERSTANDING (completed before script writing):\n" +
+        analysis: "WHOLE-VIDEO STORY UNDERSTANDING — CONTEXT ONLY, DO NOT RETELL THE WHOLE STORY:\n" +
           String(analysis.wholeStoryAnalysis || analysis.analysis || "") +
-          "\n\nTHIS SEGMENT'S LOCAL EVIDENCE (source " + segment.start + "–" + segment.end + " seconds):\n" +
+          "\n\nTHIS SEGMENT'S LOCAL EVIDENCE — WRITE ONLY THIS PART:\n" +
           String(segment.analysis || ""),
+        segmentTitle: String(segment.title || ("Story segment " + (i + 1))),
+        segmentIndex: i + 1,
+        segmentCount: recapSegments.length,
+        segmentStart: segment.start,
+        segmentEnd: segment.end,
         recapStyle: document.getElementById("style").value,
         voice: document.getElementById("voice").value
       })
