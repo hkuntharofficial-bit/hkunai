@@ -1587,17 +1587,19 @@ app.get("/api/analyze-video-progress", (req, res) => {
 app.post("/api/analyze-video-chunks", async (req, res) => {
   const body = req.body || {};
   const key = String(body.key || "");
-  const mimeType = String(body.mimeType || "video/mp4");
   const recapStyle = String(body.recapStyle || "Movie Recap");
-  const localVideo = path.join(TEMP_DIR, "chunk-source-" + crypto.randomUUID() + ".mp4");
-  const workDir = path.join(TEMP_DIR, "chunk-work-" + crypto.randomUUID());
-  const temporaryFiles = [localVideo];
+  const progressKey = key;
+  const setProgress = (update) => {
+    const previous = videoAnalysisProgress.get(progressKey) || {};
+    videoAnalysisProgress.set(progressKey, { ...previous, ...update, updatedAt: Date.now() });
+  };
+  const localVideo = path.join(TEMP_DIR, "whole-video-" + crypto.randomUUID() + ".mp4");
 
   try {
     if (!GEMINI) return res.status(503).json({ ok: false, error: "GEMINI_API_KEY is not configured" });
     if (!key.startsWith("uploads/")) return res.status(400).json({ ok: false, error: "A valid uploaded video key is required" });
 
-    fs.mkdirSync(workDir, { recursive: true });
+    setProgress({ phase: "uploading", completed: 0, total: 1, percent: 2, message: "မူရင်းဗီဒီယိုတစ်ပုဒ်လုံးကို AI အတွက် ပြင်ဆင်နေပါသည်..." });
     await downloadR2Object(key, localVideo);
     const probe = spawnSync(ffmpegPath, ["-hide_banner", "-i", localVideo], { encoding: "utf8", timeout: 30000, maxBuffer: 2 * 1024 * 1024 });
     const probeText = String(probe.stderr || "") + "\n" + String(probe.stdout || "");
@@ -1605,155 +1607,122 @@ app.post("/api/analyze-video-chunks", async (req, res) => {
     const duration = match ? Number(match[1]) * 3600 + Number(match[2]) * 60 + Number(match[3]) : NaN;
     if (!Number.isFinite(duration) || duration <= 0) throw new Error("မူရင်းဗီဒီယိုကြာချိန်ကို မဖတ်နိုင်ပါ။");
 
-    // Aim for 45-second chunks, evenly distribute the tail so chunks
-    // are normally between 10 and 45 seconds rather than leaving a tiny tail.
-    const chunkCount = Math.max(1, Math.ceil(duration / 45));
-    const chunkDuration = duration / chunkCount;
-    setAnalysisProgress({ phase: "splitting", completed: 0, total: chunkCount, percent: 5, message: "ဗီဒီယိုကို " + chunkCount + " ပိုင်း ခွဲနေပါသည်..." });
-    const segments = new Array(chunkCount);
-    const chunkFiles = [];
-    for (let i = 0; i < chunkCount; i++) {
-      const start = i * chunkDuration;
-      const length = Math.min(chunkDuration, duration - start);
-      const chunkPath = path.join(workDir, "segment-" + String(i + 1).padStart(5, "0") + ".mp4");
-      chunkFiles.push({ index: i + 1, start, length, path: chunkPath });
-      temporaryFiles.push(chunkPath);
-      const splitArgs = [
-        "-hide_banner", "-y", "-loglevel", "error",
-        "-ss", start.toFixed(3), "-i", localVideo, "-t", length.toFixed(3),
-        "-map", "0:v:0", "-map", "0:a?",
-        "-c:v", "libx264", "-preset", "ultrafast", "-crf", "28", "-threads", "1",
-        "-pix_fmt", "yuv420p", "-c:a", "aac", "-b:a", "96k", "-movflags", "+faststart",
-        chunkPath
-      ];
-      await runFFmpeg(splitArgs);
-      if (!fs.existsSync(chunkPath) || fs.statSync(chunkPath).size < 1024) {
-        throw new Error("ဗီဒီယိုအပိုင်း " + (i + 1) + " ကို ခွဲထုတ်မရပါ။");
-      }
-      setAnalysisProgress({ phase: "splitting", completed: i + 1, total: chunkCount, percent: 5 + Math.round(((i + 1) / chunkCount) * 10), message: "ဗီဒီယိုအပိုင်း " + (i + 1) + "/" + chunkCount + " ခွဲပြီးပါပြီ" });
-    }
+    // Do NOT split or re-encode the source video. Upload the original file
+    // once and ask Gemini to understand the entire video in one pass.
+    setProgress({ phase: "understanding", completed: 0, total: 1, percent: 8, message: "AI က မူရင်းဗီဒီယိုတစ်ပုဒ်လုံးကို တစ်ကြိမ်တည်း Story Understanding လုပ်နေပါသည်..." });
+    let videoFile = await GEMINI.files.upload({
+      file: localVideo,
+      config: { mimeType: "video/mp4" }
+    });
+    videoFile = await waitForGeminiFile(videoFile);
+    setProgress({ phase: "understanding", completed: 0, total: 1, percent: 20, message: "AI က ဗီဒီယိုတစ်ပုဒ်လုံးရဲ့ ဇာတ်လမ်း၊ ဇာတ်ကောင်နဲ့ ဖြစ်ရပ်အစဉ်ကို နားလည်နေပါသည်..." });
 
-    setAnalysisProgress({ phase: "analyzing", completed: 0, total: chunkCount, percent: 15, message: "AI က ဇာတ်လမ်းအပိုင်းများကို ခွဲခြမ်းစိတ်ဖြာနေပါသည်..." });
-    // Analyze up to two independent segments to reduce total wait time
-    // without flooding Gemini or the host's memory/CPU.
-    let nextChunkIndex = 0;
-    async function analyzeChunkWorker() {
-      while (true) {
-        const slot = nextChunkIndex++;
-        if (slot >= chunkFiles.length) return;
-        const chunk = chunkFiles[slot];
-        const i = chunk.index - 1;
-        const start = chunk.start;
-        const length = chunk.length;
-        const chunkPath = chunk.path;
-        let videoFile = await GEMINI.files.upload({
-          file: chunkPath,
-          config: { mimeType: "video/mp4" }
-        });
-        videoFile = await waitForGeminiFile(videoFile);
-        const prompt = [
-          "You are HKUN AI, analyzing one chronological segment of a movie for Myanmar recap.",
-          "This is source segment " + chunk.index + " of " + chunkCount + ".",
-          "Its source-video time range is " + start.toFixed(2) + " to " + (start + length).toFixed(2) + " seconds.",
-          "Recap style: " + recapStyle,
-          "Analyze only visible events in this segment. Do not invent characters, events, relationships, or dialogue.",
-          "Summarize the actual events in chronological order, important characters and visuals, and why each event matters.",
-          "Use absolute source-video timestamps by adding " + start.toFixed(2) + " seconds to timestamps within this segment.",
-          "Mention continuity with the previous segment only if the footage supports it. Return a concise, detailed recap analysis suitable for generating a Myanmar narration."
-        ].join("\n\n");
-
-        let analysisResponse;
-        try {
-          analysisResponse = await GEMINI.models.generateContent({
-            model: GEMINI_MODEL,
-            contents: [{ role: "user", parts: [
-              { fileData: { fileUri: videoFile.uri, mimeType: videoFile.mimeType || "video/mp4" } },
-              { text: prompt }
-            ] }]
-          });
-        } catch (primaryError) {
-          if (GEMINI_MODEL === "gemini-2.5-flash") throw primaryError;
-          analysisResponse = await GEMINI.models.generateContent({
-            model: "gemini-2.5-flash",
-            contents: [{ role: "user", parts: [
-              { fileData: { fileUri: videoFile.uri, mimeType: videoFile.mimeType || "video/mp4" } },
-              { text: prompt }
-            ] }]
-          });
-        }
-
-        const analysis = String(analysisResponse.text || "").trim();
-        if (!analysis) throw new Error("ဗီဒီယိုအပိုင်း " + chunk.index + " အတွက် AI analysis မရရှိပါ။");
-        segments[i] = {
-          index: chunk.index,
-          start: Number(start.toFixed(3)),
-          end: Number((start + length).toFixed(3)),
-          duration: Number(length.toFixed(3)),
-          analysis
-        };
-        const completed = segments.filter(Boolean).length;
-        setAnalysisProgress({ phase: "analyzing", completed, total: chunkCount, percent: 15 + Math.round((completed / chunkCount) * 80), message: "AI ခွဲခြမ်းစိတ်ဖြာပြီး " + completed + "/" + chunkCount + " ပိုင်း" });
-        console.log("CHUNK ANALYZED:", chunk.index, "/", chunkCount, "source seconds", start, "-", start + length);
-        removeTempFile(chunkPath);
-      }
-    }
-    await Promise.all(Array.from({ length: Math.min(2, chunkFiles.length) }, () => analyzeChunkWorker()));
-
-    // Step 1: finish understanding every segment, then synthesize one coherent
-    // whole-video story before allowing recap-script generation to begin.
-    setAnalysisProgress({ phase: "synthesizing", completed: chunkCount, total: chunkCount, percent: 97, message: "အပိုင်းအားလုံးပြီးပါပြီ။ ဇာတ်လမ်းတစ်ပုဒ်လုံးကို စုစည်းနားလည်နေပါသည်..." });
-    const segmentEvidence = segments.map(item =>
-      "[SEGMENT " + item.index + " | " + item.start + "–" + item.end + " seconds]\n" + item.analysis
-    ).join("\n\n");
     const wholeStoryPrompt = [
-      "You are HKUN AI. Build the definitive whole-video story understanding for a Myanmar movie recap.",
-      "All chronological source-video segments have already been analyzed. Synthesize them into ONE coherent, complete understanding of the entire video before any recap script is written.",
-      "Preserve chronological order and distinguish confirmed events from uncertainty. Track characters, relationships, motivations, cause-and-effect, turning points, setup/payoff, and ending if present.",
-      "Resolve continuity across segment boundaries using the evidence below. Do not invent scenes, dialogue, identities, motives, or an ending not supported by the evidence.",
-      "Use source timestamps where helpful. If evidence conflicts or a detail is unclear, say so.",
+      "You are HKUN AI, an expert movie-story analyst for Myanmar-language recaps.",
+      "Watch and analyze the ENTIRE original video in this single request. Do not split the video into files or analyze isolated clips.",
+      "Explain the story from beginning to end in chronological order, including characters and relationships, motivations, cause and effect, important visual events, turning points, setups/payoffs, and the ending if shown.",
+      "Use only events actually visible or audible in the video. Never invent scenes, dialogue, character identities, motives, or an ending. Clearly mark uncertainty.",
+      "Use approximate source-video timestamps for major events when possible.",
       "Recap style: " + recapStyle,
-      "Return a detailed whole-video story analysis, not the narration script. It will be used as shared context for writing each segment's recap."
+      "Return a detailed structured story understanding for the complete video. This is analysis, not the final narration script."
     ].join("\n\n");
+
     let wholeStoryResponse;
     try {
       wholeStoryResponse = await GEMINI.models.generateContent({
         model: GEMINI_MODEL,
-        contents: [{ role: "user", parts: [{ text: wholeStoryPrompt + "\n\nCHRONOLOGICAL SEGMENT ANALYSES:\n" + segmentEvidence }] }]
+        contents: [{ role: "user", parts: [
+          { fileData: { fileUri: videoFile.uri, mimeType: videoFile.mimeType || "video/mp4" } },
+          { text: wholeStoryPrompt }
+        ] }]
       });
     } catch (primaryError) {
       if (GEMINI_MODEL === "gemini-2.5-flash") throw primaryError;
       wholeStoryResponse = await GEMINI.models.generateContent({
         model: "gemini-2.5-flash",
-        contents: [{ role: "user", parts: [{ text: wholeStoryPrompt + "\n\nCHRONOLOGICAL SEGMENT ANALYSES:\n" + segmentEvidence }] }]
+        contents: [{ role: "user", parts: [
+          { fileData: { fileUri: videoFile.uri, mimeType: videoFile.mimeType || "video/mp4" } },
+          { text: wholeStoryPrompt }
+        ] }]
       });
     }
     const wholeStoryAnalysis = String(wholeStoryResponse.text || "").trim();
     if (!wholeStoryAnalysis) throw new Error("ဗီဒီယိုတစ်ပုဒ်လုံးအတွက် Story Understanding အဖြေမရရှိပါ။");
-    setAnalysisProgress({ phase: "completed", completed: chunkCount, total: chunkCount, percent: 100, message: "ဗီဒီယိုတစ်ပုဒ်လုံး Story Understanding ပြီးပါပြီ" });
 
+    // Only AFTER whole-video understanding is complete, divide the story
+    // analysis into narrative beats for script writing. No video files are split.
+    setProgress({ phase: "segmenting", completed: 0, total: 1, percent: 78, message: "Story Understanding ပြီးပါပြီ။ ယခု Recap Script အတွက် ဇာတ်လမ်းအပိုင်းများ စီစဉ်နေပါသည်..." });
+    const segmentPrompt = [
+      "Based on the COMPLETE whole-video story analysis below, divide the NARRATION SCRIPT into 4 to 12 chronological story-beat sections, depending on video length and story complexity.",
+      "Important: these are script/story sections only. Do NOT split or request video clips. Every section must use the shared whole-story context and must not invent events.",
+      "Return ONLY valid JSON in this exact shape: { \"segments\": [ { \"index\": 1, \"title\": \"short beat title\", \"start\": 0, \"end\": 120, \"analysis\": \"evidence and events belonging to this story beat\" } ] }.",
+      "The start/end fields are approximate timestamps in seconds from the ORIGINAL full video, not clip-relative times. Sections must be in chronological order, cover the whole story without major gaps, and not overlap substantially.",
+      "Full video duration in seconds: " + duration.toFixed(2),
+      "Whole-video story understanding:\n" + wholeStoryAnalysis
+    ].join("\n\n");
+    let segmentResponse;
+    try {
+      segmentResponse = await GEMINI.models.generateContent({
+        model: GEMINI_MODEL,
+        contents: [{ role: "user", parts: [{ text: segmentPrompt }] }]
+      });
+    } catch (primaryError) {
+      if (GEMINI_MODEL === "gemini-2.5-flash") throw primaryError;
+      segmentResponse = await GEMINI.models.generateContent({
+        model: "gemini-2.5-flash",
+        contents: [{ role: "user", parts: [{ text: segmentPrompt }] }]
+      });
+    }
+    const rawSegments = String(segmentResponse.text || "").trim().replace(/^\`\`\`(?:json)?\s*/i, "").replace(/\s*\`\`\`$/, "");
+    let parsed;
+    try {
+      parsed = JSON.parse(rawSegments);
+    } catch {
+      const jsonMatch = rawSegments.match(/\{[\s\S]*\}/);
+      if (!jsonMatch) throw new Error("Recap Script အတွက် ဇာတ်လမ်းအပိုင်းများကို JSON အဖြစ် မဖတ်နိုင်ပါ။");
+      parsed = JSON.parse(jsonMatch[0]);
+    }
+    let segments = Array.isArray(parsed.segments) ? parsed.segments : [];
+    segments = segments.map((item, index) => {
+      const start = Math.max(0, Math.min(duration, Number(item.start) || 0));
+      const fallbackEnd = index === segments.length - 1 ? duration : start + duration / Math.max(1, segments.length);
+      const end = Math.max(start, Math.min(duration, Number(item.end) || fallbackEnd));
+      return {
+        index: index + 1,
+        title: String(item.title || ("Story beat " + (index + 1))).slice(0, 160),
+        start: Number(start.toFixed(3)),
+        end: Number(end.toFixed(3)),
+        duration: Number((end - start).toFixed(3)),
+        analysis: String(item.analysis || "").trim()
+      };
+    }).filter(item => item.analysis);
+    if (!segments.length) {
+      segments = [{
+        index: 1, title: "Complete story recap", start: 0,
+        end: Number(duration.toFixed(3)), duration: Number(duration.toFixed(3)),
+        analysis: wholeStoryAnalysis
+      }];
+    }
+    setProgress({ phase: "completed", completed: 1, total: 1, percent: 100, message: "ဗီဒီယိုတစ်ပုဒ်လုံး Story Understanding ပြီးပါပြီ။ Recap Script အပိုင်းလိုက်ရေးရန် အဆင်သင့်ဖြစ်ပါပြီ။" });
     return res.json({
-      ok: true,
-      key,
+      ok: true, key,
       sourceDuration: Number(duration.toFixed(3)),
-      chunkDuration: Number(chunkDuration.toFixed(3)),
       segments,
       analysis: wholeStoryAnalysis,
       wholeStoryAnalysis
     });
   } catch (error) {
     if (key.startsWith("uploads/")) {
-      const previous = videoAnalysisProgress.get(key) || {};
-      videoAnalysisProgress.set(key, { ...previous, phase: "failed", error: String(error?.message || error).slice(0, 1000), message: "Story Understanding မအောင်မြင်ပါ", updatedAt: Date.now() });
+      const previous = videoAnalysisProgress.get(progressKey) || {};
+      videoAnalysisProgress.set(progressKey, { ...previous, phase: "failed", error: String(error?.message || error).slice(0, 1000), message: "Story Understanding မအောင်မြင်ပါ", updatedAt: Date.now() });
     }
-    console.error("CHUNKED VIDEO ANALYSIS ERROR:", error?.stack || error);
+    console.error("WHOLE VIDEO STORY UNDERSTANDING ERROR:", error?.stack || error);
     if (!res.headersSent) return res.status(500).json({
-      ok: false,
-      error: "Chunked video analysis failed",
+      ok: false, error: "Whole-video story understanding failed",
       message: String(error?.message || error).slice(0, 1000)
     });
   } finally {
-    for (const file of temporaryFiles) removeTempFile(file);
-    try { fs.rmSync(workDir, { recursive: true, force: true }); } catch {}
+    removeTempFile(localVideo);
   }
 });
 
