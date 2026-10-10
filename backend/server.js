@@ -2140,16 +2140,16 @@ app.post("/api/render-video", renderUpload.single("audio"), async (req, res) => 
       "-i", audioPath,
       "-f", "srt", "-i", subtitlePath,
       "-map", "0:v:0", "-map", "1:a:0", "-map", "2:0",
-      // Keep peak memory low on Render's free instance; 720p is sufficient for recap output.
-      "-vf", "fps=24,scale='min(640,iw)':-2",
-      // Render at 640px/24fps to avoid FFmpeg being OOM-killed on Render free instances.
-      "-c:v", "libx264", "-preset", "ultrafast", "-crf", "32",
+      // Preserve the source video's original dimensions, frame rate, and metadata.
+      // Re-encode only because the narration and subtitle streams must be muxed in.
+      // Ultrafast + one encoder thread reduces peak RAM on Render without downscaling.
+      "-c:v", "libx264", "-preset", "ultrafast", "-crf", "23",
       "-threads", "1", "-thread_type", "slice",
       "-pix_fmt", "yuv420p",
-      "-c:a", "aac", "-b:a", "64k",
+      "-c:a", "aac", "-b:a", "128k",
       "-c:s", "mov_text",
       "-max_muxing_queue_size", "2048",
-      "-map_metadata", "-1",
+      "-map_metadata", "0",
       "-shortest", "-movflags", "+faststart",
       outputPath
     ]);
