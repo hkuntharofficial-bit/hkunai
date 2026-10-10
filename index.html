@@ -1528,6 +1528,7 @@ async function renderFinalVideo(videoKey) {
 }
 
 window.generateMyanmarVoice = generateMyanmarVoice;
+window.renderFinalVideo = renderFinalVideo;
 
 return await readJSON(
   response
@@ -1709,7 +1710,7 @@ window.hkunRecapScript =
        
 await window.generateMyanmarVoice(scriptResult.script);
 
-      await renderFinalVideo(result.key);
+      await window.renderFinalVideo(result.key);
        
 stages[2].textContent =
   "✓ Myanmar recap script completed";
