@@ -834,6 +834,10 @@ function showSetupPage(page) {
     el.classList.toggle("current", i === target);
     el.classList.toggle("visited", i < target);
   });
+  // Navigation rows sit between sections, so hide every row except the active page's.
+  document.querySelectorAll(".setup-nav").forEach((el, i) => {
+    el.style.display = (i === target && target < 3) ? "flex" : "none";
+  });
   const title = document.getElementById("setupPageTitle");
   const count = document.getElementById("setupPageCount");
   if (title) title.textContent = setupTitles[target];
