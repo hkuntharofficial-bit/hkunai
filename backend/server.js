@@ -1597,12 +1597,13 @@ app.post("/api/analyze-video-chunks", async (req, res) => {
     // are normally between 10 and 45 seconds rather than leaving a tiny tail.
     const chunkCount = Math.max(1, Math.ceil(duration / 45));
     const chunkDuration = duration / chunkCount;
-    const segments = [];
-
+    const segments = new Array(chunkCount);
+    const chunkFiles = [];
     for (let i = 0; i < chunkCount; i++) {
       const start = i * chunkDuration;
       const length = Math.min(chunkDuration, duration - start);
       const chunkPath = path.join(workDir, "segment-" + String(i + 1).padStart(5, "0") + ".mp4");
+      chunkFiles.push({ index: i + 1, start, length, path: chunkPath });
       temporaryFiles.push(chunkPath);
       const splitArgs = [
         "-hide_banner", "-y", "-loglevel", "error",
@@ -1616,56 +1617,70 @@ app.post("/api/analyze-video-chunks", async (req, res) => {
       if (!fs.existsSync(chunkPath) || fs.statSync(chunkPath).size < 1024) {
         throw new Error("ဗီဒီယိုအပိုင်း " + (i + 1) + " ကို ခွဲထုတ်မရပါ။");
       }
-
-      let videoFile = await GEMINI.files.upload({
-        file: chunkPath,
-        config: { mimeType: "video/mp4" }
-      });
-      videoFile = await waitForGeminiFile(videoFile);
-      const prompt = [
-        "You are HKUN AI, analyzing one chronological segment of a movie for Myanmar recap.",
-        "This is source segment " + (i + 1) + " of " + chunkCount + ".",
-        "Its source-video time range is " + start.toFixed(2) + " to " + (start + length).toFixed(2) + " seconds.",
-        "Recap style: " + recapStyle,
-        "Analyze only visible events in this segment. Do not invent characters, events, relationships, or dialogue.",
-        "Summarize the actual events in chronological order, important characters and visuals, and why each event matters.",
-        "Use absolute source-video timestamps by adding " + start.toFixed(2) + " seconds to timestamps within this segment.",
-        "Mention continuity with the previous segment only if the footage supports it. Return a concise, detailed recap analysis suitable for generating a Myanmar narration."
-      ].join("\n\n");
-
-      let analysisResponse;
-      try {
-        analysisResponse = await GEMINI.models.generateContent({
-          model: GEMINI_MODEL,
-          contents: [{ role: "user", parts: [
-            { fileData: { fileUri: videoFile.uri, mimeType: videoFile.mimeType || "video/mp4" } },
-            { text: prompt }
-          ] }]
-        });
-      } catch (primaryError) {
-        if (GEMINI_MODEL === "gemini-2.5-flash") throw primaryError;
-        analysisResponse = await GEMINI.models.generateContent({
-          model: "gemini-2.5-flash",
-          contents: [{ role: "user", parts: [
-            { fileData: { fileUri: videoFile.uri, mimeType: videoFile.mimeType || "video/mp4" } },
-            { text: prompt }
-          ] }]
-        });
-      }
-
-      const analysis = String(analysisResponse.text || "").trim();
-      if (!analysis) throw new Error("ဗီဒီယိုအပိုင်း " + (i + 1) + " အတွက် AI analysis မရရှိပါ။");
-      segments.push({
-        index: i + 1,
-        start: Number(start.toFixed(3)),
-        end: Number((start + length).toFixed(3)),
-        duration: Number(length.toFixed(3)),
-        analysis
-      });
-      console.log("CHUNK ANALYZED:", i + 1, "/", chunkCount, "source seconds", start, "-", start + length);
-      // Release the local chunk immediately; retain only its textual recap.
-      removeTempFile(chunkPath);
     }
+
+    // Analyze up to two independent segments at once to reduce total wait time
+    // without flooding Gemini or the host's memory/CPU.
+    let nextChunkIndex = 0;
+    async function analyzeChunkWorker() {
+      while (true) {
+        const slot = nextChunkIndex++;
+        if (slot >= chunkFiles.length) return;
+        const chunk = chunkFiles[slot];
+        const i = chunk.index - 1;
+        const start = chunk.start;
+        const length = chunk.length;
+        const chunkPath = chunk.path;
+        let videoFile = await GEMINI.files.upload({
+          file: chunkPath,
+          config: { mimeType: "video/mp4" }
+        });
+        videoFile = await waitForGeminiFile(videoFile);
+        const prompt = [
+          "You are HKUN AI, analyzing one chronological segment of a movie for Myanmar recap.",
+          "This is source segment " + chunk.index + " of " + chunkCount + ".",
+          "Its source-video time range is " + start.toFixed(2) + " to " + (start + length).toFixed(2) + " seconds.",
+          "Recap style: " + recapStyle,
+          "Analyze only visible events in this segment. Do not invent characters, events, relationships, or dialogue.",
+          "Summarize the actual events in chronological order, important characters and visuals, and why each event matters.",
+          "Use absolute source-video timestamps by adding " + start.toFixed(2) + " seconds to timestamps within this segment.",
+          "Mention continuity with the previous segment only if the footage supports it. Return a concise, detailed recap analysis suitable for generating a Myanmar narration."
+        ].join("\n\n");
+
+        let analysisResponse;
+        try {
+          analysisResponse = await GEMINI.models.generateContent({
+            model: GEMINI_MODEL,
+            contents: [{ role: "user", parts: [
+              { fileData: { fileUri: videoFile.uri, mimeType: videoFile.mimeType || "video/mp4" } },
+              { text: prompt }
+            ] }]
+          });
+        } catch (primaryError) {
+          if (GEMINI_MODEL === "gemini-2.5-flash") throw primaryError;
+          analysisResponse = await GEMINI.models.generateContent({
+            model: "gemini-2.5-flash",
+            contents: [{ role: "user", parts: [
+              { fileData: { fileUri: videoFile.uri, mimeType: videoFile.mimeType || "video/mp4" } },
+              { text: prompt }
+            ] }]
+          });
+        }
+
+        const analysis = String(analysisResponse.text || "").trim();
+        if (!analysis) throw new Error("ဗီဒီယိုအပိုင်း " + chunk.index + " အတွက် AI analysis မရရှိပါ။");
+        segments[i] = {
+          index: chunk.index,
+          start: Number(start.toFixed(3)),
+          end: Number((start + length).toFixed(3)),
+          duration: Number(length.toFixed(3)),
+          analysis
+        };
+        console.log("CHUNK ANALYZED:", chunk.index, "/", chunkCount, "source seconds", start, "-", start + length);
+        removeTempFile(chunkPath);
+      }
+    }
+    await Promise.all(Array.from({ length: Math.min(2, chunkFiles.length) }, () => analyzeChunkWorker()));
 
     return res.json({
       ok: true,
