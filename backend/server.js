@@ -954,6 +954,16 @@ app.post(
       }
 
 
+      const expectedParts = Math.ceil(session.fileSize / session.partSize);
+      if (session.parts.size !== expectedParts) {
+        return res.status(400).json({
+          ok: false,
+          error: "Upload is incomplete",
+          expectedParts,
+          receivedParts: session.parts.size
+        });
+      }
+
       const parts =
         Array.from(
           session.parts.entries()
@@ -2462,7 +2472,7 @@ app.post("/api/tts", async (req, res) => {
         const pitchFactor = Number.isFinite(requestedPitch) ? Math.max(0.85, Math.min(1.20, requestedPitch)) : 1;
         if (pitchFactor !== 1) {
           const pitchedPath = path.join(tempDir, "speech-pitched.mp3");
-          const pitchResult = spawnSync("ffmpeg", [
+          const pitchResult = spawnSync(ffmpegPath, [
             "-y", "-hide_banner", "-loglevel", "error",
             "-i", audioPath,
             "-af", `asetrate=24000*${pitchFactor},aresample=24000,atempo=${(1 / pitchFactor).toFixed(5)}`,
