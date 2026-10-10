@@ -1443,10 +1443,10 @@ async function generateMyanmarVoice(scriptText) {
       const start = elapsed;
       elapsed += duration * Math.max(1, sentence.length) / totalWeight;
       const end = index === sentences.length - 1 ? duration : elapsed;
-      return (index + 1) + "\\n" + srtTimestamp(start) + " --> " +
-        srtTimestamp(end) + "\\n" + sentence + "\\n";
-    }).join("\\n");
-    const blob = new Blob(["\\uFEFF" + srt], { type: "text/plain;charset=utf-8" });
+      return (index + 1) + "\n" + srtTimestamp(start) + " --> " +
+        srtTimestamp(end) + "\n" + sentence + "\n";
+    }).join("\n");
+    const blob = new Blob(["\uFEFF" + srt], { type: "text/plain;charset=utf-8" });
     const link = document.getElementById("subtitleDownload");
     if (window.hkunSubtitleObjectUrl) URL.revokeObjectURL(window.hkunSubtitleObjectUrl);
     window.hkunSubtitleObjectUrl = URL.createObjectURL(blob);
