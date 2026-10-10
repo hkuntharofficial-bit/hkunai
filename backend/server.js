@@ -5,7 +5,7 @@ const fs = require("fs");
 const path = require("path");
 const os = require("os");
 const crypto = require("crypto");
-const { spawn } = require("child_process");
+const { spawn, spawnSync } = require("child_process");
 const ffmpegPath = require("ffmpeg-static");
 const { pipeline } = require("stream/promises");
 
@@ -2180,7 +2180,7 @@ app.post("/api/render-video", renderUpload.single("audio"), async (req, res) => 
       // Bound scene count and verify source duration before launching FFmpeg.
       const probe = spawnSync(ffmpegPath, ["-hide_banner","-i",sourcePath], { encoding: "utf8", timeout: 15000 });
       const probeText = String(probe.stderr || "") + "\n" + String(probe.stdout || "");
-      const durationMatch = probeText.match(/Duration:\\s*(\\d+):(\\d+):(\\d+(?:\\.\\d+)?)/i);
+      const durationMatch = probeText.match(/Duration:\s*(\d+):(\d+):(\d+(?:\.\d+)?)/i);
       const sourceDuration = durationMatch ? Number(durationMatch[1]) * 3600 + Number(durationMatch[2]) * 60 + Number(durationMatch[3]) : NaN;
       if (!Number.isFinite(sourceDuration) || sourceDuration <= 0) throw new Error("Could not read source video duration from FFmpeg probe");
       scenePlan = scenePlan.slice(0, 12).filter(s => s.start < sourceDuration && s.end <= sourceDuration + 0.05);
