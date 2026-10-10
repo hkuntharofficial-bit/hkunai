@@ -2040,6 +2040,10 @@ IMPORTANT RULES:
 20. Do not provide a conclusion or ending unless this is the final segment and the evidence shows the ending.
 21. Start with a natural continuation when segment index is greater than 1; avoid repeating character introductions and plot setup.
 22. Keep the narration length proportional to the requested segment's duration and evidence.
+23. Write a detailed long-form recap, not a short synopsis. Explain important actions, motivations, cause-and-effect, and transitions supported by this segment's evidence.
+24. For a segment of 0-60 seconds, aim for about 100-180 Myanmar words; 1-3 minutes, 250-450 words; 3-5 minutes, 450-700 words; over 5 minutes, write proportionally more without padding or inventing facts.
+25. Do not compress distinct events into one vague sentence. Describe each important event in sequence while avoiding repetition.
+26. Make this part substantial and complete, but do not repeat material from other segments.
 
 RECAP STYLE:
 ${style}
